@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openwebui
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://helm.openwebui.com
+      chart: open-webui
+      targetRevision: 16.0.0
+      helm:
+        releaseName: openwebui
+        valueFiles:
+          - $myai/base/openwebui/values.yaml
+
+    - repoURL: https://github.com/cunialino/myai.git
+      path: base/openwebui
+      targetRevision: main
+      ref: myai
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openwebui
+
+  syncPolicy:
+    automated:
+      enabled: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

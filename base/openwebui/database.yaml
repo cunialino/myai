@@ -1,0 +1,10 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: openwebui
+  namespace: cnpg-system
+spec:
+  name: openwebui
+  owner: openwebui
+  cluster:
+    name: pg-cluster
