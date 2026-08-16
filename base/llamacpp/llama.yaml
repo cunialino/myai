@@ -1,0 +1,139 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: models
+spec:
+  capacity:
+    storage: 500Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: local-storage
+  local:
+    path: /second_part/models
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - elcungem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: models-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-storage
+  resources:
+    requests:
+      storage: 500Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llamacpp
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: llamacpp
+  template:
+    metadata:
+      labels:
+        app: llamacpp
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: elcungem
+      containers:
+        - name: llamacpp
+          image: custom.io/llama-server-radv:latest
+          securityContext:
+            privileged: true
+          command:
+            - llama-server
+          args:
+            - --models-preset
+            - /second_part/models/config.ini
+            - --models-max
+            - "1"
+            - -ngl
+            - "999"
+            - --host
+            - 0.0.0.0
+            - --metrics
+            - --cache-prompt
+            - --slot-save-path
+            - /tmp/llama-cache
+            - -t
+            - "16"
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              memory: "10Gi"
+              cpu: "100m"
+            limits:
+              memory: "30Gi"
+              cpu: "1"
+          volumeMounts:
+            - name: models-storage
+              mountPath: /second_part/models
+            - name: llama-cache
+              mountPath: /tmp/llama-cache
+            - name: dri-device
+              mountPath: /dev/dri
+      volumes:
+        - name: dri-device
+          hostPath:
+            path: /dev/dri
+        - name: models-storage
+          persistentVolumeClaim:
+            claimName: models-pvc
+        - name: llama-cache
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llamacpp-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: llamacpp
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: llamacpp-ingress
+  annotations:
+    tailscale.com/proxy-class: "tailscale-stream"
+
+spec:
+  ingressClassName: tailscale
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: llamacpp-svc
+                port:
+                  number: 8080
+  tls:
+  - hosts:
+    - genai
