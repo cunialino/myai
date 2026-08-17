@@ -131,7 +131,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: llamacpp-svc
+                name: llamacpp-svc-proxy
                 port:
                   number: 8080
   tls:

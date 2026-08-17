@@ -1,0 +1,48 @@
+apiVersion: http.keda.sh/v1beta1
+kind: InterceptorRoute
+metadata:
+  name: llamacpp-graphiti
+  namespace: llms
+spec:
+  target:
+    service: llamacpp-graphiti-svc
+    port: 8082
+  rules:
+    - hosts:
+        - llamacpp-graphiti-svc-proxy.llms
+        - llamacpp-graphiti-svc-proxy.llms.svc.cluster.local
+  scalingMetric:
+    concurrency:
+      targetValue: 8
+  timeouts:
+    readiness: 180s
+    request: 900s
+    responseHeader: 180s
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: llamacpp-graphiti
+  namespace: llms
+spec:
+  scaleTargetRef:
+    name: llamacpp-graphiti
+  minReplicaCount: 0
+  maxReplicaCount: 1
+  cooldownPeriod: 5400
+  triggers:
+    - type: external-push
+      metadata:
+        scalerAddress: keda-add-ons-http-external-scaler.keda:9090
+        interceptorRoute: llamacpp-graphiti
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llamacpp-graphiti-svc-proxy
+  namespace: llms
+spec:
+  type: ExternalName
+  externalName: keda-add-ons-http-interceptor-proxy.keda.svc.cluster.local
+  ports:
+    - port: 8080

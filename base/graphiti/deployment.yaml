@@ -45,11 +45,11 @@ spec:
             - name: OPENAI_API_KEY
               value: no-key
             - name: OPENAI_BASE_URL
-              value: http://llamacpp-graphiti-svc.llms.svc.cluster.local:8082/v1
+              value: http://llamacpp-graphiti-svc-proxy.llms.svc.cluster.local:8080/v1
             - name: LLM__MODEL
               value: qwen3-4b-2507
             - name: OPENAI_API_URL
-              value: http://llamacpp-embed-svc.llms.svc.cluster.local:8081/v1
+              value: http://llamacpp-embed-svc-proxy.llms.svc.cluster.local:8080/v1
             - name: EMBEDDER__MODEL
               value: nomic-embed
             - name: EMBEDDER__DIMENSIONS

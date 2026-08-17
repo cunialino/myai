@@ -1,0 +1,48 @@
+apiVersion: http.keda.sh/v1beta1
+kind: InterceptorRoute
+metadata:
+  name: llamacpp-embed
+  namespace: llms
+spec:
+  target:
+    service: llamacpp-embed-svc
+    port: 8081
+  rules:
+    - hosts:
+        - llamacpp-embed-svc-proxy.llms
+        - llamacpp-embed-svc-proxy.llms.svc.cluster.local
+  scalingMetric:
+    concurrency:
+      targetValue: 16
+  timeouts:
+    readiness: 120s
+    request: 300s
+    responseHeader: 60s
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: llamacpp-embed
+  namespace: llms
+spec:
+  scaleTargetRef:
+    name: llamacpp-embed
+  minReplicaCount: 0
+  maxReplicaCount: 1
+  cooldownPeriod: 5400
+  triggers:
+    - type: external-push
+      metadata:
+        scalerAddress: keda-add-ons-http-external-scaler.keda:9090
+        interceptorRoute: llamacpp-embed
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llamacpp-embed-svc-proxy
+  namespace: llms
+spec:
+  type: ExternalName
+  externalName: keda-add-ons-http-interceptor-proxy.keda.svc.cluster.local
+  ports:
+    - port: 8080
