@@ -79,6 +79,9 @@ spec:
             - name: factories-patch
               mountPath: /app/mcp/src/services/factories.py
               subPath: factories.py
+            - name: mcp-server-patch
+              mountPath: /app/mcp/src/graphiti_mcp_server.py
+              subPath: graphiti_mcp_server.py
       volumes:
         - name: data
           persistentVolumeClaim:
@@ -86,6 +89,9 @@ spec:
         - name: factories-patch
           configMap:
             name: graphiti-factories
+        - name: mcp-server-patch
+          configMap:
+            name: graphiti-mcp-server
 ---
 apiVersion: v1
 kind: Service
