@@ -37,22 +37,23 @@ spec:
             - name: GRAPHITI_GROUP_ID
               value: main
             - name: SEMAPHORE_LIMIT
-              value: "10"
+              value: "2"
             - name: BROWSER
               value: "1"
             - name: CONFIG_PATH
               value: /app/mcp/config/config.yaml
             - name: OPENAI_API_KEY
               value: no-key
+            - name: OPENAI_BASE_URL
+              value: http://llamacpp-graphiti-svc.llms.svc.cluster.local:8082/v1
+            - name: LLM__MODEL
+              value: qwen3-4b-2507
             - name: OPENAI_API_URL
-              value: http://llamacpp-svc.llms.svc.cluster.local:8080/v1
-            # TODO: MODEL_NAME / EMBEDDER_MODEL must match the model id loaded by
-            # llama-server (check: curl -s http://llamacpp-svc.llms.svc.cluster.local:8080/v1/models).
-            # The model must also expose /v1/embeddings for graphiti's hybrid search.
-            - name: MODEL_NAME
-              value: MODEL_ID
-            - name: EMBEDDER_MODEL
-              value: MODEL_ID
+              value: http://llamacpp-embed-svc.llms.svc.cluster.local:8081/v1
+            - name: EMBEDDER__MODEL
+              value: nomic-embed
+            - name: EMBEDDER__DIMENSIONS
+              value: "768"
             - name: GRAPHITI_TELEMETRY_ENABLED
               value: "false"
           ports:
@@ -75,10 +76,16 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/falkordb/data
+            - name: factories-patch
+              mountPath: /app/mcp/src/services/factories.py
+              subPath: factories.py
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: graphiti-data
+        - name: factories-patch
+          configMap:
+            name: graphiti-factories
 ---
 apiVersion: v1
 kind: Service

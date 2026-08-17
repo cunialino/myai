@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llamacpp-embed
+  namespace: llms
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: llamacpp-embed
+  template:
+    metadata:
+      labels:
+        app: llamacpp-embed
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: elcungem
+      containers:
+        - name: llamacpp-embed
+          image: custom.io/llama-server-radv:latest
+          command:
+            - llama-server
+          args:
+            - --model
+            - /second_part/models/nomic-embed-text-v1.5.Q8_0.gguf
+            - --alias
+            - nomic-embed
+            - --pooling
+            - mean
+            - --embeddings
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8081"
+            - --ctx-size
+            - "2048"
+            - --ubatch-size
+            - "2048"
+            - -t
+            - "8"
+            - --metrics
+          ports:
+            - containerPort: 8081
+              name: http
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "100m"
+            limits:
+              memory: "4Gi"
+              cpu: "4"
+          volumeMounts:
+            - name: models-storage
+              mountPath: /second_part/models
+      volumes:
+        - name: models-storage
+          persistentVolumeClaim:
+            claimName: models-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llamacpp-embed-svc
+  namespace: llms
+spec:
+  type: ClusterIP
+  selector:
+    app: llamacpp-embed
+  ports:
+    - protocol: TCP
+      port: 8081
+      targetPort: 8081

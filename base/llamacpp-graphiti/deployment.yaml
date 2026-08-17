@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llamacpp-graphiti
+  namespace: llms
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: llamacpp-graphiti
+  template:
+    metadata:
+      labels:
+        app: llamacpp-graphiti
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: elcungem
+      containers:
+        - name: llamacpp-graphiti
+          image: custom.io/llama-server-radv:latest
+          securityContext:
+            privileged: true
+          command:
+            - llama-server
+          args:
+            - --model
+            - /second_part/models/qwen3-4b-2507-Q4_K_M.gguf
+            - --alias
+            - qwen3-4b-2507
+            - -ngl
+            - "999"
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8082"
+            - --ctx-size
+            - "8192"
+            - --parallel
+            - "1"
+            - -t
+            - "16"
+            - --metrics
+          ports:
+            - containerPort: 8082
+              name: http
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "100m"
+            limits:
+              memory: "8Gi"
+              cpu: "8"
+          volumeMounts:
+            - name: models-storage
+              mountPath: /second_part/models
+            - name: dri-device
+              mountPath: /dev/dri
+      volumes:
+        - name: dri-device
+          hostPath:
+            path: /dev/dri
+        - name: models-storage
+          persistentVolumeClaim:
+            claimName: models-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llamacpp-graphiti-svc
+  namespace: llms
+spec:
+  type: ClusterIP
+  selector:
+    app: llamacpp-graphiti
+  ports:
+    - protocol: TCP
+      port: 8082
+      targetPort: 8082

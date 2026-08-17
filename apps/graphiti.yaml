@@ -5,10 +5,16 @@ metadata:
   namespace: argocd
 spec:
   project: default
-  source:
-    repoURL: 'https://github.com/cunialino/myai.git'
-    path: base/graphiti
-    targetRevision: main
+  sources:
+    - repoURL: 'https://github.com/cunialino/myai.git'
+      path: base/graphiti
+      targetRevision: main
+    - repoURL: 'https://github.com/cunialino/myai.git'
+      path: base/llamacpp-graphiti
+      targetRevision: main
+    - repoURL: 'https://github.com/cunialino/myai.git'
+      path: base/llamacpp-embed
+      targetRevision: main
   destination:
     server: https://kubernetes.default.svc
     namespace: graphiti
