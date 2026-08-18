@@ -37,30 +37,3 @@ spec:
       metadata:
         scalerAddress: keda-add-ons-http-external-scaler.keda:9090
         interceptorRoute: llamacpp
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: llamacpp-svc-proxy
-  namespace: llms
-spec:
-  type: ClusterIP
-  ports:
-    - port: 8080
-      targetPort: 8080
----
-# Selectorless service -> manually point the Endpoints at the KEDA
-# HTTP add-on interceptor proxy POD IPs (single NAT) so all traffic
-# (in-cluster + Tailscale ingress) flows through the interceptor and
-# triggers scale-to-zero. Update the IPs if the interceptor pods move.
-apiVersion: v1
-kind: Endpoints
-metadata:
-  name: llamacpp-svc-proxy
-  namespace: llms
-subsets:
-  - addresses:
-      - ip: 10.42.0.235
-      - ip: 10.42.1.250
-    ports:
-      - port: 8080
