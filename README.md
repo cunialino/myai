@@ -5,7 +5,7 @@ AI-related workloads for the homelab cluster, GitOps-driven via ArgoCD.
 Deploys:
 - **llamacpp** — `llama-server` (Vulkan/RADV) serving local models on the GPU node `elcungem`. Image is built from the flake and pushed to the local registry.
 - **openwebui** — chat UI (official helm chart), pointing at the local llama endpoint, backed by the CNPG `pg-cluster` for its database.
-- **graphiti** — temporal knowledge-graph memory for agents (FalkorDB combined image), using the local llama endpoint for LLM + embeddings. Register it as an MCP tool server inside Open WebUI.
+- **graphiti** — temporal knowledge-graph memory for agents (separate FalkorDB deployment + standalone MCP server), using the local llama endpoint for LLM + embeddings. Register it as an MCP tool server inside Open WebUI.
 
 ## Layout
 
@@ -42,7 +42,7 @@ The k3s nodes mirror `custom.io -> 192.168.0.2:5000` (see `registries.yaml`), so
 ## Placeholders to fill in
 
 - `base/openwebui/externalsecret.yaml` — Bitwarden item UUID for the `openwebui-db` password. The matching `openwebui` role was added to `homelab/base/cnpg/cluster.yaml`.
-- `base/graphiti/deployment.yaml` — `MODEL_NAME` / `EMBEDDER_MODEL` must match the model id loaded by `llama-server` (check `curl -s http://llamacpp-svc.llms.svc.cluster.local:8080/v1/models`); the model must expose `/v1/embeddings` for graphiti's hybrid search.
+- `base/graphiti/deployment.yaml` — `MODEL_NAME` / `EMBEDDER_MODEL` must match the model id loaded by `llama-server` (check `curl -s http://llamacpp-svc.llms.svc.cluster.local:8080/v1/models`); the model must expose `/v1/embeddings` for graphiti's hybrid search. FalkorDB runs as a separate `falkordb` deployment (`base/graphiti/falkordb.yaml`) with the `graphiti-data` PVC; the MCP server connects via `redis://falkordb.graphiti.svc.cluster.local:6379`. The `standalone` image (no bundled DB) is used, so a FalkorDB crash only restarts the DB pod.
 - Tailscale hostnames are short tailnet names (`chat`, `graphiti`); they resolve as `<name>.tail2f38ea.ts.net` on the tailnet.
 - Open WebUI model selector: as soon as `llamacpp` is up, the `llama-local` model appears via `models.fetch` / the OpenAI URL; pick it in the UI. If the model supports tool calling, the Tools/MCP pages inside Open WebUI work against it.
 
