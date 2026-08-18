@@ -45,3 +45,28 @@ The k3s nodes mirror `custom.io -> 192.168.0.2:5000` (see `registries.yaml`), so
 - `base/graphiti/deployment.yaml` — `MODEL_NAME` / `EMBEDDER_MODEL` must match the model id loaded by `llama-server` (check `curl -s http://llamacpp-svc.llms.svc.cluster.local:8080/v1/models`); the model must expose `/v1/embeddings` for graphiti's hybrid search.
 - Tailscale hostnames are short tailnet names (`chat`, `graphiti`); they resolve as `<name>.tail2f38ea.ts.net` on the tailnet.
 - Open WebUI model selector: as soon as `llamacpp` is up, the `llama-local` model appears via `models.fetch` / the OpenAI URL; pick it in the UI. If the model supports tool calling, the Tools/MCP pages inside Open WebUI work against it.
+
+## KEDA HTTP add-on known issues
+
+### RBAC gap on Kubernetes >= 1.33
+
+The KEDA HTTP add-on v0.15.0 external scaler discovers the interceptor admin endpoint via Kubernetes `Endpoints` (v1), but its ClusterRole only grants `endpointslices.discovery.k8s.io` permissions. On K8s 1.33+ the scaler fails with `there isn't any valid interceptor endpoint`, which means `isActive` is always `false` and scale-to-zero never triggers.
+
+Fix (re-apply after add-on upgrades/reinstalls):
+
+```bash
+kubectl patch clusterrole keda-add-ons-http-external-scaler --type=json \
+  -p='[{"op":"add","path":"/rules/-","value":{"apiGroups":[""],"resources":["endpoints"],"verbs":["get","list","watch"]}}]'
+kubectl delete pod -n keda -l app.kubernetes.io/component=scaler
+```
+
+Verify:
+
+```bash
+kubectl port-forward -n keda svc/keda-add-ons-http-interceptor-admin 9090
+curl localhost:9090/queue
+```
+
+### llama.cpp preset option naming
+
+When using `--models-preset`, the INI file must use llama.cpp CLI option names (e.g. `repeat-penalty`, not `repetition-penalty`). The preset file is at `/second_part/models/config.ini` on the `elcungem` node.
