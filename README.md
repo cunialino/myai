@@ -52,7 +52,9 @@ The k3s nodes mirror `custom.io -> 192.168.0.2:5000` (see `registries.yaml`), so
 
 The KEDA HTTP add-on v0.15.0 external scaler discovers the interceptor admin endpoint via Kubernetes `Endpoints` (v1), but its ClusterRole only grants `endpointslices.discovery.k8s.io` permissions. On K8s 1.33+ the scaler fails with `there isn't any valid interceptor endpoint`, which means `isActive` is always `false` and scale-to-zero never triggers.
 
-Fix (re-apply after add-on upgrades/reinstalls):
+Fix: `base/llamacpp/keda-rbac-fix.yaml` adds a separate ClusterRole + ClusterRoleBinding that grants the scaler service account `endpoints` access. ArgoCD will keep this in sync, so it survives KEDA HTTP add-on upgrades/reinstalls.
+
+If you need an immediate manual patch (not persisted):
 
 ```bash
 kubectl patch clusterrole keda-add-ons-http-external-scaler --type=json \
@@ -66,6 +68,12 @@ Verify:
 kubectl port-forward -n keda svc/keda-add-ons-http-interceptor-admin 9090
 curl localhost:9090/queue
 ```
+
+### Tailscale ingress bypasses the interceptor (ExternalName unsupported)
+
+The Tailscale operator (k8s-operator) resolves ingress backends by **ClusterIP + Endpoints**; it does **not** support `ExternalName` services. If the `llamacpp` ingress backend was an `ExternalName` pointing at `keda-add-ons-http-interceptor-proxy.keda.svc.cluster.local`, the operator logged `Ingress contains no valid backends` and kept a **stale serve-config pointing straight at `llamacpp-svc`** — bypassing the interceptor, so `genai.tail2f38ea.ts.net` requests never triggered scale-to-zero and returned `no route to host` when scaled to 0.
+
+Fix (in `base/llamacpp/keda.yaml`): `llamacpp-svc-proxy` is now a selectorless `ClusterIP` Service paired with a manually managed `Endpoints` object that lists the KEDA HTTP add-on interceptor **pod IPs** (single NAT — nested VIP→VIP does not route). All traffic through the ingress flows via the interceptor and triggers scaling. If the interceptor pods move, update the IPs in `keda.yaml` and re-sync.
 
 ### llama.cpp preset option naming
 
