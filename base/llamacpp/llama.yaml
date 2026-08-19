@@ -74,7 +74,13 @@ spec:
             - --slot-save-path
             - /tmp/llama-cache
             - -t
-            - "16"
+            - "8"
+            - -fa
+            - "on"
+            - -ctk
+            - q4_0
+            - -ctv
+            - q4_0
           ports:
             - containerPort: 8080
               name: http
