@@ -26,7 +26,7 @@ spec:
             - name: FALKORDB_URI
               value: redis://falkordb.graphiti.svc.cluster.local:6379
             - name: FALKORDB_DATABASE
-              value: memory
+              value: main
             - name: GRAPHITI_GROUP_ID
               value: main
             - name: SEMAPHORE_LIMIT
