@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     llama-cpp = {
-      url = "github:ggml-org/llama.cpp/b10167";
+      url = "github:ggml-org/llama.cpp/master";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
