@@ -43,6 +43,14 @@ spec:
           ports:
             - containerPort: 8081
               name: http
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 60
           resources:
             requests:
               memory: "1Gi"

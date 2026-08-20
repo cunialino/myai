@@ -16,8 +16,8 @@ spec:
       targetValue: 8
   timeouts:
     readiness: 180s
-    request: 900s
-    responseHeader: 180s
+    request: 7200s
+    responseHeader: 3600s
 ---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
