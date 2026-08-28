@@ -13,6 +13,7 @@ Deploys:
 apps/            ArgoCD Application definitions (one per workload)
 base/<app>/      manifests / helm values / secrets for each workload
 bootstrap/       App-of-Apps to let ArgoCD pick up apps/ (apply once)
+docs/            documentation site (Zola + Goyo theme, published via GitHub Pages)
 flake.nix        llama.cpp Vulkan image + dev shell
 ```
 

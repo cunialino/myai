@@ -1,0 +1,52 @@
+base_url = "https://cunialino.github.io/myai/"
+theme = "goyo"
+title = "myai"
+build_search_index = true
+default_language = "en"
+generate_sitemap = true
+
+# Tags for internal search only, no feed
+taxonomies = [
+    { name = "tags", feed = false },
+]
+
+[translations]
+# errata system
+errata_section = "Errata & Updates"
+# translation for copy/copied
+copy = "Copy"
+copied = "Copied!"
+failed_to_copy = "Failed to copy!"
+# Nav buttons (bottom of pages & sections)
+next = "Next"
+back_to = "Back to"
+previous = "Previous"
+# contribution (bottom of pages & sections)
+edit_page = "Edit this page"
+found_error_alert = "Found an error or it needs a clarification?"
+open_issue = "Open an issue on GitHub."
+attribution = "Substantiated corrections will be incorporated with attribution."
+found_typo_alert = "Found a typo?"
+fork_and_pr = "Fork, modify and open a PR."
+# Share (bottom of pages & sections)
+copy_url_msg = "Copy URL"
+share_on_x = "Share on X"
+# Title of the Table of Content (ToC)
+toc_title = "ON THIS PAGE"
+
+[markdown]
+
+[markdown.highlighting]
+theme = "catppuccin-mocha"
+
+[extra]
+nav = [
+    { name = "Documents", url = "/introduction", type = "url", icon = "fa-solid fa-book" },
+    { name = "GitHub", url = "https://github.com/cunialino/myai", type = "url", icon = "fa-brands fa-github" },
+]
+[extra.theme]
+colorset = "dark"
+brightness = "normal"
+disable_toggle = false
+default_theme_dark = "goyo-dark"
+default_theme_light = "goyo-light"
