@@ -70,6 +70,7 @@ spec:
             - --host
             - 0.0.0.0
             - --metrics
+            - --jinja
             - --cache-prompt
             - --slot-save-path
             - /tmp/llama-cache
