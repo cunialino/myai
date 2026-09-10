@@ -24,10 +24,12 @@ is multi-source:
 
 Key settings in [`values.yaml`](https://github.com/cunialino/myai/tree/main/base/openwebui/values.yaml):
 
-- `openaiBaseApiUrl: http://llamacpp-svc-proxy.llms.svc.cluster.local:8080/v1`
-  — goes through the KEDA interceptor proxy, so traffic from Open WebUI
-  counts toward llama.cpp's scale-to-zero.
-- `openaiApiKey: no-key` — the local server does not authenticate.
+- `openaiBaseApiUrls` — list of OpenAI-compatible endpoints:
+  `http://llamacpp-svc-proxy.llms.svc.cluster.local:8080/v1` (goes through
+  the KEDA interceptor proxy, so traffic from Open WebUI counts toward
+  llama.cpp's scale-to-zero) and `http://192.168.0.6:8731/v1`.
+- `openaiApiKeys: [no-key, no-key]` — one key per URL, same order; the
+  local servers do not authenticate.
 - Postgres via the shared CNPG cluster: `DATABASE_TYPE=postgresql`,
   `DATABASE_HOST=pg-cluster-rw.cnpg-system.svc.cluster.local`,
   `DATABASE_NAME=openwebui`, user/password from the `openwebui-db` secret.

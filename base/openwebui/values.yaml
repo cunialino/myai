@@ -8,8 +8,12 @@ websocket:
   redis:
     enabled: false
 
-openaiBaseApiUrl: http://llamacpp-svc-proxy.llms.svc.cluster.local:8080/v1
-openaiApiKey: no-key
+openaiBaseApiUrls:
+  - http://llamacpp-svc-proxy.llms.svc.cluster.local:8080/v1
+  - http://192.168.0.6:8731/v1
+openaiApiKeys:
+  - no-key
+  - no-key
 
 extraEnvVars:
   - name: DATABASE_TYPE
