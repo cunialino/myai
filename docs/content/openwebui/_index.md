@@ -34,8 +34,10 @@ Key settings in [`values.yaml`](https://github.com/cunialino/myai/tree/main/base
   `DATABASE_HOST=pg-cluster-rw.cnpg-system.svc.cluster.local`,
   `DATABASE_NAME=openwebui`, user/password from the `openwebui-db` secret.
 - Persistence: 10Gi on `longhorn-wdblack`.
-- Ingress: Tailscale (`tailscale-small` proxy class), host `chat` →
-  `chat.tail2f38ea.ts.net`.
+- Ingress: Tailscale (`tailscale-stream` proxy class, 1 CPU/512Mi — the
+  `tailscale-small` 10m CPU limit throttled `tailscaled` enough to break
+  control-plane handshakes and WebSocket heartbeats, causing proxy crash
+  loops and browser reconnect loops), host `chat` → `chat.tail2f38ea.ts.net`.
 
 ## Database
 
