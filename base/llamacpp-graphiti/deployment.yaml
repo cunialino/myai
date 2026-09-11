@@ -25,9 +25,12 @@ spec:
             - llama-server
           args:
             - --model
-            - /second_part/models/qwen3-4b-2507-Q4_K_M.gguf
+            - /second_part/models/gpt-oss-20b-MXFP4.gguf
             - --alias
-            - qwen3-4b-2507
+            - gpt-oss-20b
+            - --jinja
+            - --reasoning
+            - "off"
             - -ngl
             - "999"
             - --host
@@ -54,10 +57,10 @@ spec:
             failureThreshold: 60
           resources:
             requests:
-              memory: "2Gi"
+              memory: "4Gi"
               cpu: "100m"
             limits:
-              memory: "8Gi"
+              memory: "24Gi"
               cpu: "8"
           volumeMounts:
             - name: models-storage

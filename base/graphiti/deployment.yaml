@@ -38,7 +38,9 @@ spec:
             - name: OPENAI_BASE_URL
               value: http://llamacpp-graphiti-svc-proxy.llms.svc.cluster.local:8080/v1
             - name: LLM__MODEL
-              value: qwen3-4b-2507
+              value: gpt-oss-20b
+            - name: LLM__MAX_TOKENS
+              value: "4096"
             - name: OPENAI_API_URL
               value: http://llamacpp-embed-svc-proxy.llms.svc.cluster.local:8080/v1
             - name: EMBEDDER__MODEL
