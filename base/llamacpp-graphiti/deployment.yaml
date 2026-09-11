@@ -29,16 +29,24 @@ spec:
             - --alias
             - gpt-oss-20b
             - --jinja
-            - --reasoning
-            - "off"
+            # gpt-oss has no thinking off-switch -- its chat template only reads
+            # `reasoning_effort`, so `--reasoning off` was a silent no-op and the
+            # model kept emitting a full thinking channel. `--reasoning-effort low`
+            # is the only real lever: measured on a graphiti-sized prompt,
+            # completion 1565 -> 588 tokens, thinking 3250 -> 16 chars.
+            - --reasoning-effort
+            - low
             - -ngl
             - "999"
             - --host
             - 0.0.0.0
             - --port
             - "8082"
+            # 8192 left only 4096 prompt tokens after reserving max_tokens=4096,
+            # which graphiti's extract_nodes template + a large episode overflows.
+            # KV cache is ~72KB/token here, so 16384 costs ~0.6GB.
             - --ctx-size
-            - "8192"
+            - "16384"
             - --parallel
             - "1"
             - -t
