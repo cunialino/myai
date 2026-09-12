@@ -1,5 +1,23 @@
+# Open WebUI — fully declarative.
+#
+# ENABLE_PERSISTENT_CONFIG=false makes the `config` table inert. Verified against
+# the running 0.11.0 backend:
+#
+#   models/config.py  get()           -> returns default_value(key), DB never read
+#   models/config.py  upsert()        -> writes Config.DEFAULTS in-process only
+#   config.py         seed_defaults() -> skips every key, no rows written
+#   main.py:422       set_tool_servers() runs at boot, so MCP registers from env
+#
+# Consequence: the Admin UI still *works*, but every change is in-memory and is
+# lost on the next pod restart. Git is the only durable source of truth.
+#
+# The 8 settings that had been hand-made in the Admin UI are reproduced below;
+# the other 333 config rows already matched what env produces, so nothing else
+# changes behaviour.
+
 ollama:
   enabled: false
+
 pipelines:
   enabled: false
 
@@ -8,6 +26,9 @@ websocket:
   redis:
     enabled: false
 
+# Chat models live on the Strix Halo and are consumed as an external LAN service.
+# The dead http://llamacpp-svc-proxy.llms.svc.cluster.local:8080/v1 that the
+# Admin UI had kept pinned (disabled, but still listed) is gone for good.
 openaiBaseApiUrls:
   - http://192.168.0.6:8731/v1
   - http://192.168.0.6:11434/v1
@@ -16,6 +37,41 @@ openaiApiKeys:
   - no-key
 
 extraEnvVars:
+  # The switch that makes every value in this file actually take effect.
+  - name: ENABLE_PERSISTENT_CONFIG
+    value: "false"
+
+  # --- previously UI-only, now declared ---
+  - name: ENABLE_DIRECT_CONNECTIONS
+    value: "true"
+  - name: ENABLE_MEMORIES
+    value: "false"
+  - name: ENABLE_NOTES
+    value: "false"
+  - name: ENABLE_SIGNUP
+    value: "false"
+
+  # --- JSON blobs (see config-env.yaml) ---
+  - name: OPENAI_API_CONFIGS
+    valueFrom:
+      configMapKeyRef:
+        name: openwebui-env
+        key: OPENAI_API_CONFIGS
+  - name: TOOL_SERVER_CONNECTIONS
+    valueFrom:
+      configMapKeyRef:
+        name: openwebui-env
+        key: TOOL_SERVER_CONNECTIONS
+
+  # The chart derives WEBUI_URL from ingress.host, which yields the bare tailnet
+  # short name "https://chat". The tailscale operator upgrades the *Ingress* to
+  # chat.tail2f38ea.ts.net, but Open WebUI builds share links, OAuth redirects and
+  # media URLs straight from WEBUI_URL, so those come out unreachable. Uncomment to
+  # fix; unrelated to the persistent-config work.
+  # - name: WEBUI_URL
+  #   value: https://chat.tail2f38ea.ts.net
+
+  # --- database ---
   - name: DATABASE_TYPE
     value: postgresql
   - name: DATABASE_HOST

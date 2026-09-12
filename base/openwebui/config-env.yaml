@@ -1,0 +1,44 @@
+# Non-scalar Open WebUI settings that have no first-class helm value.
+# Consumed by values.yaml via extraEnvVars -> configMapKeyRef.
+#
+# NOTE: OPENAI_API_CONFIGS is keyed by the *index* into openaiBaseApiUrls.
+# Reordering that list silently re-points these configs at the wrong endpoint.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openwebui-env
+  namespace: openwebui
+data:
+  # 0 -> http://192.168.0.6:8731/v1   (Strix Halo, local)
+  # 1 -> http://192.168.0.6:11434/v1  (Strix Halo, external)
+  #
+  # connection_type is functional, not cosmetic: utils/task.py picks
+  # task.model.default for "local" models and task.model.external otherwise.
+  # Omitting this key entirely would make both connections "external".
+  OPENAI_API_CONFIGS: >-
+    {"0":{"enable":true,"connection_type":"local","auth_type":"none","tags":[],
+    "model_ids":[],"prefix_id":"","passthrough_params":[]},
+    "1":{"enable":true,"connection_type":"external","auth_type":"none","tags":[],
+    "model_ids":[],"prefix_id":"","passthrough_params":[]}}
+
+  # MCP tool servers. Registered at startup by set_tool_servers() (main.py:422),
+  # so no admin API call is needed to make these live.
+  #
+  # info.id is load-bearing: it prefixes every exposed tool name
+  # (f"{server_id}_{function_name}", utils/tools.py:471) and falls back to the
+  # list index when absent. Keep the ids stable and append-only.
+  TOOL_SERVER_CONNECTIONS: >-
+    [{"url":"http://graphiti-mcp.graphiti.svc.cluster.local:8000/mcp/",
+    "path":"openapi.json","type":"mcp","auth_type":"none","key":"","headers":null,
+    "spec_type":"url",
+    "info":{"id":"graphiti","name":"graphiti","description":"Temporal knowledge graph memory"},
+    "config":{"enable":true,
+    "access_grants":[{"permission":"read","principal_id":"*","principal_type":"user"}],
+    "function_name_filter_list":""}},
+    {"url":"http://ddg-search.ddg-search.svc.cluster.local/mcp",
+    "path":"openapi.json","type":"mcp","auth_type":"none","key":"","headers":null,
+    "spec_type":"url",
+    "info":{"id":"ddg","name":"ddg","description":"DuckDuckGo search"},
+    "config":{"enable":true,
+    "access_grants":[{"permission":"read","principal_id":"*","principal_type":"user"}],
+    "function_name_filter_list":""}}]
