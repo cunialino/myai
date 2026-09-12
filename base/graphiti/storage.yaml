@@ -1,0 +1,46 @@
+# Model storage shared by the two graphiti llama servers.
+#
+# Local PV on the elcungem GPU node; the GGUF files live in /second_part/models.
+#
+# reclaimPolicy is Retain (it used to be Delete). The claim was recreated when the
+# llama servers moved from `llms` into the `graphiti` namespace: with Delete, the
+# PV object would have been released and garbage-collected along with the old PVC,
+# leaving the new claim Pending forever (local PVs have no provisioner to
+# rebind them).
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: models
+spec:
+  capacity:
+    storage: 500Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: /second_part/models
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - elcungem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: models-pvc
+spec:
+  # Bind explicitly: this is a statically provisioned local PV with no
+  # provisioner, so never let the claim settle on some other local-storage PV.
+  volumeName: models
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-storage
+  resources:
+    requests:
+      storage: 500Gi

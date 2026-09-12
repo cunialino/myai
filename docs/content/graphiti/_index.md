@@ -19,15 +19,15 @@ inside Open WebUI, so the chat agent can recall and store context.
 flowchart TB
     owui["Open WebUI<br/>MCP client"] -->|streamable HTTP| mcp["graphiti-mcp<br/>zepai standalone image"]
     mcp -->|episodes, search| falkor["FalkorDB<br/>graphiti ns, longhorn PVC"]
-    mcp -->|entity extraction| llm["llamacpp-graphiti<br/>qwen3-4b-2507 :8082"]
+    mcp -->|entity extraction| llm["llamacpp-graphiti<br/>gpt-oss-20b :8082"]
     mcp -->|embeddings| emb["llamacpp-embed<br/>nomic-embed :8081"]
     llm & emb --> keda["KEDA HTTP add-on<br/>scale-to-zero"]
 {% end %}
 
 The ArgoCD Application ([`apps/graphiti.yaml`](https://github.com/cunialino/myai/tree/main/apps/graphiti.yaml))
-is multi-source: `base/graphiti`, `base/llamacpp-graphiti`, and
-`base/llamacpp-embed`, all landing in the `graphiti` namespace (the two
-llama servers live in `llms`).
+has a single source, `base/graphiti`, which holds every resource this workload
+needs — MCP server, FalkorDB, the two llama servers, their KEDA wiring, the
+models PVC and the KEDA RBAC fix — all landing in the `graphiti` namespace.
 
 ## MCP server
 
@@ -40,9 +40,9 @@ runs the `zepai/knowledge-graph-mcp:standalone` image (no bundled DB) with
 | `FALKORDB_URI` | `redis://falkordb.graphiti.svc.cluster.local:6379` | FalkorDB service |
 | `FALKORDB_DATABASE` / `GRAPHITI_GROUP_ID` | `main` | Graph namespace |
 | `SEMAPHORE_LIMIT` | `2` | Concurrent episode processing (small local LLM, keep it low) |
-| `OPENAI_BASE_URL` | `http://llamacpp-graphiti-svc-proxy.llms.svc.cluster.local:8080/v1` | LLM endpoint |
-| `LLM__MODEL` | `qwen3-4b-2507` | Must match the `--alias` of llamacpp-graphiti |
-| `OPENAI_API_URL` | `http://llamacpp-embed-svc-proxy.llms.svc.cluster.local:8080/v1` | Embeddings endpoint |
+| `OPENAI_BASE_URL` | `http://llamacpp-graphiti-svc-proxy.graphiti.svc.cluster.local:8080/v1` | LLM endpoint |
+| `LLM__MODEL` | `gpt-oss-20b` | Must match the `--alias` of llamacpp-graphiti |
+| `OPENAI_API_URL` | `http://llamacpp-embed-svc-proxy.graphiti.svc.cluster.local:8080/v1` | Embeddings endpoint |
 | `EMBEDDER__MODEL` / `EMBEDDER__DIMENSIONS` | `nomic-embed` / `768` | Must match llamacpp-embed |
 
 Both endpoints go through the KEDA interceptor proxies, so Graphiti's LLM
@@ -71,17 +71,22 @@ deployment from the MCP server, so a FalkorDB crash only restarts the DB pod.
 
 ## Dedicated llama servers
 
-Graphiti does not share the chat model; it has two dedicated, scale-to-zero
-`llama-server` instances on `elcungem` (same image and models PVC as
-[llama.cpp](/llamacpp/)):
+Graphiti does not share the chat model that Open WebUI uses (that one lives on
+the Strix Halo box); it has two dedicated, scale-to-zero `llama-server`
+instances on the `elcungem` GPU node, built from the same flake image:
 
 | Server | Model | Port | Role | KEDA concurrency target |
 |--------|-------|------|------|------------------------|
-| `llamacpp-graphiti` | `qwen3-4b-2507-Q4_K_M.gguf` (alias `qwen3-4b-2507`) | 8082 | Entity extraction / LLM calls | 8 |
+| `llamacpp-graphiti` | `gpt-oss-20b-MXFP4.gguf` (alias `gpt-oss-20b`) | 8082 | Entity extraction / LLM calls | 8 |
 | `llamacpp-embed` | `nomic-embed-text-v1.5.Q8_0.gguf` (alias `nomic-embed`, `--pooling mean --embeddings`) | 8081 | Embeddings for hybrid search | 16 |
 
 Both use `external-push` ScaledObjects (min 0 / max 1, 5400s cooldown) with
 long request timeouts (graphiti: 7200s — episode processing chains many LLM
 calls; embed: 300s). Their `*-svc-proxy` services are `ExternalName` aliases
 of the KEDA interceptor proxy — safe here because only in-cluster clients
-(Graphiti) use them.
+(Graphiti) use them; see [KEDA known issues](/keda/).
+
+They read their GGUFs from the shared `models-pvc` defined in
+[`storage.yaml`](https://github.com/cunialino/myai/tree/main/base/graphiti/storage.yaml)
+— a statically provisioned local PV on `elcungem` (`/second_part/models`,
+500Gi, `Retain`).

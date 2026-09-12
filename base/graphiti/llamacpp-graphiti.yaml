@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: llamacpp-graphiti
-  namespace: llms
 spec:
   strategy:
     type: Recreate
@@ -87,7 +86,6 @@ apiVersion: v1
 kind: Service
 metadata:
   name: llamacpp-graphiti-svc
-  namespace: llms
 spec:
   type: ClusterIP
   selector:
@@ -96,3 +94,56 @@ spec:
     - protocol: TCP
       port: 8082
       targetPort: 8082
+---
+# Scale-to-zero wiring. Requests reaching the KEDA HTTP interceptor under these
+# hosts are queued and counted; the external scaler pushes that activity to the
+# ScaledObject, which wakes the deployment (and lets it drop back to zero after
+# the cooldown).
+apiVersion: http.keda.sh/v1beta1
+kind: InterceptorRoute
+metadata:
+  name: llamacpp-graphiti
+spec:
+  target:
+    service: llamacpp-graphiti-svc
+    port: 8082
+  rules:
+    - hosts:
+        - llamacpp-graphiti-svc-proxy.graphiti
+        - llamacpp-graphiti-svc-proxy.graphiti.svc.cluster.local
+  scalingMetric:
+    concurrency:
+      targetValue: 8
+  timeouts:
+    readiness: 180s
+    request: 7200s
+    responseHeader: 3600s
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: llamacpp-graphiti
+spec:
+  scaleTargetRef:
+    name: llamacpp-graphiti
+  minReplicaCount: 0
+  maxReplicaCount: 1
+  cooldownPeriod: 5400
+  triggers:
+    - type: external-push
+      metadata:
+        scalerAddress: keda-add-ons-http-external-scaler.keda:9090
+        interceptorRoute: llamacpp-graphiti
+---
+# In-cluster alias of the KEDA interceptor proxy. A plain ExternalName is fine
+# here: only in-cluster clients (graphiti-mcp) resolve it, so the Tailscale
+# operator -- which cannot handle ExternalName backends -- is not in this path.
+apiVersion: v1
+kind: Service
+metadata:
+  name: llamacpp-graphiti-svc-proxy
+spec:
+  type: ExternalName
+  externalName: keda-add-ons-http-interceptor-proxy.keda.svc.cluster.local
+  ports:
+    - port: 8080

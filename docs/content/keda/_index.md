@@ -25,8 +25,7 @@ flowchart LR
 Each scaled workload defines an `InterceptorRoute` (which hosts route
 through the interceptor, scaling metric, timeouts) and a `ScaledObject`
 (`external-push` trigger pointing at the scaler). See
-[llama.cpp](/llamacpp/) and [Graphiti](/graphiti/) for the concrete
-examples.
+[Graphiti](/graphiti/) for the concrete examples.
 
 ## Known issues
 
@@ -38,10 +37,11 @@ grants `endpointslices.discovery.k8s.io` permissions. On K8s 1.33+ the
 scaler fails with `there isn't any valid interceptor endpoint`, which means
 `isActive` is always `false` and scale-to-zero never triggers.
 
-Fix: [`base/llamacpp/keda-rbac-fix.yaml`](https://github.com/cunialino/myai/tree/main/base/llamacpp/keda-rbac-fix.yaml)
+Fix: [`base/graphiti/keda-rbac-fix.yaml`](https://github.com/cunialino/myai/tree/main/base/graphiti/keda-rbac-fix.yaml)
 adds a separate ClusterRole + ClusterRoleBinding that grants the scaler
 service account `endpoints` access. ArgoCD keeps it in sync, so it survives
-KEDA HTTP add-on upgrades/reinstalls.
+KEDA HTTP add-on upgrades/reinstalls. It is cluster-scoped, so it lives with
+the only workloads that are scaled through the add-on.
 
 If you need an immediate manual patch (not persisted):
 
@@ -62,25 +62,27 @@ curl localhost:9090/queue
 
 The Tailscale operator (k8s-operator) resolves ingress backends by
 **ClusterIP + Endpoints**; it does **not** support `ExternalName` services.
-If the `llamacpp` ingress backend was an `ExternalName` pointing at
+If an ingress backend is an `ExternalName` pointing at
 `keda-add-ons-http-interceptor-proxy.keda.svc.cluster.local`, the operator
-logged `Ingress contains no valid backends` and kept a **stale serve-config
-pointing straight at `llamacpp-svc`** — bypassing the interceptor, so
-`genai.tail2f38ea.ts.net` requests never triggered scale-to-zero and
-returned `no route to host` when scaled to 0.
+logs `Ingress contains no valid backends` and keeps a **stale serve-config**
+pointing straight at the target service — bypassing the interceptor, so
+requests never trigger scale-to-zero and return `no route to host` when the
+workload is at zero.
 
-Fix (in [`base/llamacpp/proxy.yaml`](https://github.com/cunialino/myai/tree/main/base/llamacpp/proxy.yaml)):
-`llamacpp-svc-proxy` is a ClusterIP Service backed by a small always-on
-nginx deployment (`keda-interceptor-forward`) that forwards to the KEDA
-interceptor proxy. nginx keeps the original `Host` header, which is how the
-interceptor routes by `InterceptorRoute` host. All traffic through the
-ingress flows via the interceptor and triggers scaling.
+Exposing a scale-to-zero service on the tailnet therefore needs a real
+ClusterIP in front of the interceptor: either a small always-on nginx forward
+that preserves the original `Host` header (how the retired `genai` endpoint
+used to work), or a selectorless Service with manually managed `Endpoints`
+listing the interceptor pod IPs.
 
-In-cluster-only clients (Graphiti) can use a plain `ExternalName` alias of
-the interceptor proxy instead — the Tailscale operator is not involved.
+Nothing in this repo is exposed that way today: the llama servers are reached
+only from inside the cluster, so their `*-svc-proxy` services can stay plain
+`ExternalName` aliases of the interceptor. If you ever put one behind a
+Tailscale ingress, do not reuse the `ExternalName` — add the ClusterIP hop.
 
 ### llama.cpp preset option naming
 
 When using `--models-preset`, the INI file must use llama.cpp **CLI option
-names** (e.g. `repeat-penalty`, not `repetition-penalty`). The preset file
-is at `/second_part/models/config.ini` on the `elcungem` node.
+names** (e.g. `repeat-penalty`, not `repetition-penalty`). The preset file is
+at `/second_part/models/config.ini` on the `elcungem` node — the same models
+directory the graphiti helpers mount.

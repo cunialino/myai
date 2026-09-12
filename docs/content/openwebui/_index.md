@@ -1,6 +1,6 @@
 +++
 title = "Open WebUI"
-description = "Chat UI for the local llama endpoint"
+description = "Chat UI for the Strix Halo model endpoints"
 weight = 3
 sort_by = "weight"
 
@@ -8,7 +8,7 @@ sort_by = "weight"
 +++
 
 [Open WebUI](https://openwebui.com/) is the chat front-end. It is deployed
-from the official helm chart and talks to the local llama endpoint over the
+from the official helm chart and talks to the Strix Halo machine over the
 OpenAI-compatible API.
 
 ## Application
@@ -24,12 +24,11 @@ is multi-source:
 
 Key settings in [`values.yaml`](https://github.com/cunialino/myai/tree/main/base/openwebui/values.yaml):
 
-- `openaiBaseApiUrls` — list of OpenAI-compatible endpoints:
-  `http://llamacpp-svc-proxy.llms.svc.cluster.local:8080/v1` (goes through
-  the KEDA interceptor proxy, so traffic from Open WebUI counts toward
-  llama.cpp's scale-to-zero) and `http://192.168.0.6:8731/v1`.
+- `openaiBaseApiUrls` — list of OpenAI-compatible endpoints, both on the
+  Strix Halo box (`192.168.0.6`): `:8731` and `:11434` (`llama.cpp`).
+  Nothing in-cluster any more — the `llms` namespace llama server is gone.
 - `openaiApiKeys: [no-key, no-key]` — one key per URL, same order; the
-  local servers do not authenticate.
+  local servers do not authenticate. The two lists must stay the same length.
 - Postgres via the shared CNPG cluster: `DATABASE_TYPE=postgresql`,
   `DATABASE_HOST=pg-cluster-rw.cnpg-system.svc.cluster.local`,
   `DATABASE_NAME=openwebui`, user/password from the `openwebui-db` secret.
@@ -53,6 +52,7 @@ Key settings in [`values.yaml`](https://github.com/cunialino/myai/tree/main/base
 
 ## Usage
 
-As soon as `llamacpp` is up, the local model appears in the model selector
-(via `models.fetch` / the OpenAI URL) — pick it in the UI. If the model
-supports tool calling, the Tools/MCP pages inside Open WebUI work against it.
+The Strix Halo endpoints are always on, so their models appear in the model
+selector right away (via `models.fetch` / the OpenAI URL) — pick one in the UI.
+If the model supports tool calling, the Tools/MCP pages inside Open WebUI work
+against it.

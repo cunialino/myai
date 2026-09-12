@@ -14,10 +14,10 @@ cta_buttons = [
 ]
 [extra.features_section]
 title = "Workloads"
-description = "Everything runs on the homelab k3s cluster, with GPU inference on elcungem (Vulkan/RADV) and scale-to-zero via KEDA."
+description = "Everything runs on the homelab k3s cluster. Chat inference comes from the Strix Halo box on the LAN; Graphiti's helper models run on the elcungem GPU node (Vulkan/RADV) and scale to zero via KEDA."
 [[extra.features_section.features]]
-title = "llama.cpp"
-desc = "llama-server (Vulkan/RADV) serving local models on the GPU node, image built from the flake"
+title = "Strix Halo inference"
+desc = "Chat models served over the LAN by the Strix Halo machine — the cluster is just a client"
 icon = "fa-solid fa-microchip"
 [[extra.features_section.features]]
 title = "Open WebUI"
@@ -25,7 +25,7 @@ desc = "Chat UI pointing at the local llama endpoint, backed by the CloudNativeP
 icon = "fa-solid fa-comments"
 [[extra.features_section.features]]
 title = "Graphiti"
-desc = "Temporal knowledge-graph memory for agents — FalkorDB + standalone MCP server"
+desc = "Temporal knowledge-graph memory for agents — FalkorDB + MCP server + dedicated llama servers"
 icon = "fa-solid fa-diagram-project"
 [[extra.features_section.features]]
 title = "DDG Search"
