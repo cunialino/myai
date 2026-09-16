@@ -42,3 +42,482 @@ data:
     "config":{"enable":true,
     "access_grants":[{"permission":"read","principal_id":"*","principal_type":"user"}],
     "function_name_filter_list":""}}]
+
+  # --- ComfyUI image generation (Open WebUI Settings > Images) ---
+  # Validated live against the running ComfyUI v0.35.0 (/prompt -> success).
+  # Input names come from the server's /object_info (see dotfiles/modules/comfy-gen).
+  # Note/comment nodes are dropped from the API workflow: the /prompt validator
+  # rejects them. Link targets resolve via the node instance's inputs-array index.
+  COMFYUI_WORKFLOW: |
+    {
+      "298": {
+        "class_type": "VAEDecode",
+        "inputs": {
+          "vae": [
+            "710",
+            0
+          ],
+          "samples": [
+            "747",
+            0
+          ]
+        },
+        "_meta": {
+          "title": "VAEDecode"
+        }
+      },
+      "694": {
+        "class_type": "CFGGuider",
+        "inputs": {
+          "cfg": 3.8,
+          "positive": [
+            "748",
+            0
+          ],
+          "negative": [
+            "749",
+            0
+          ],
+          "model": [
+            "701",
+            0
+          ]
+        },
+        "_meta": {
+          "title": "CFGGuider"
+        }
+      },
+      "700": {
+        "class_type": "KSamplerSelect",
+        "inputs": {
+          "sampler_name": "euler"
+        },
+        "_meta": {
+          "title": "KSamplerSelect"
+        }
+      },
+      "701": {
+        "class_type": "ModelSamplingAuraFlow",
+        "inputs": {
+          "shift": 1,
+          "model": [
+            "731",
+            0
+          ]
+        },
+        "_meta": {
+          "title": "Flow Shift"
+        }
+      },
+      "710": {
+        "class_type": "VAELoader",
+        "inputs": {
+          "vae_name": "vae.safetensors"
+        },
+        "_meta": {
+          "title": "VAELoader"
+        }
+      },
+      "718": {
+        "class_type": "RandomNoise",
+        "inputs": {
+          "noise_seed": 243759308503783
+        },
+        "_meta": {
+          "title": "SEED"
+        }
+      },
+      "731": {
+        "class_type": "UNETLoader",
+        "inputs": {
+          "unet_name": "unet.safetensors",
+          "weight_dtype": "default"
+        },
+        "_meta": {
+          "title": "UNETLoader"
+        }
+      },
+      "733": {
+        "class_type": "CLIPLoader",
+        "inputs": {
+          "clip_name": "text_encoder.safetensors",
+          "type": "sd3",
+          "device": "default"
+        },
+        "_meta": {
+          "title": "CLIPLoader"
+        }
+      },
+      "737": {
+        "class_type": "EmptySD3LatentImage",
+        "inputs": {
+          "width": 1152,
+          "height": 1152,
+          "batch_size": 1
+        },
+        "_meta": {
+          "title": "EmptySD3LatentImage"
+        }
+      },
+      "740": {
+        "class_type": "SaveImage",
+        "inputs": {
+          "filename_prefix": "ComfyUI",
+          "images": [
+            "298",
+            0
+          ]
+        },
+        "_meta": {
+          "title": "SaveImage"
+        }
+      },
+      "741": {
+        "class_type": "T5TokenizerOptions",
+        "inputs": {
+          "min_padding": 0,
+          "min_length": 0,
+          "clip": [
+            "733",
+            0
+          ]
+        },
+        "_meta": {
+          "title": "T5TokenizerOptions"
+        }
+      },
+      "747": {
+        "class_type": "SamplerCustomAdvanced",
+        "inputs": {
+          "noise": [
+            "718",
+            0
+          ],
+          "guider": [
+            "694",
+            0
+          ],
+          "sampler": [
+            "700",
+            0
+          ],
+          "latent_image": [
+            "737",
+            0
+          ],
+          "sigmas": [
+            "751",
+            0
+          ]
+        },
+        "_meta": {
+          "title": "SamplerCustomAdvanced"
+        }
+      },
+      "748": {
+        "class_type": "CLIPTextEncode",
+        "inputs": {
+          "text": "A highly detailed, semi-realistic fantasy landscape of a vast mountain valley at golden hour. Towering snow-capped peaks with atmospheric haze in the distance, glacial snowmelt feeding a winding crystal-clear river that snakes through terraced green meadows dotted with wildflowers. Dense layered forests of pines, firs, and autumn-colored deciduous trees cover the rolling hillsides, with subtle mist drifting between the trees. In a sunlit clearing near the riverbank sits a meticulously crafted small wooden cottage with hand-hewn log walls, a steep shingled roof, smoke rising from a stone chimney, a little wooden bridge over a creek, wild garden beds, and stacked firewood. Beside the path stands a wooden flagpole with a flowing banner bearing a subtle data-engineering / Rust-programming motif (a small gear interwoven with a code bracket). Cinematic lighting, volumetric rays, hyper-detailed textures, rich depth of field, painterly yet semi-realistic rendering, epic wide-angle composition, 8k, highly intricate, matte-painting quality.",
+          "clip": [
+            "741",
+            0
+          ]
+        },
+        "_meta": {
+          "title": "CLIP Text Encode (Positive Prompt)"
+        }
+      },
+      "749": {
+        "class_type": "CLIPTextEncode",
+        "inputs": {
+          "text": "ugly, deformed, distorted, disfigured, blurry, low resolution, watermark, signature, messy artifacts, flat colors, oversaturated, cartoonish simplistic, blocky, jpeg artifacts.",
+          "clip": [
+            "741",
+            0
+          ]
+        },
+        "_meta": {
+          "title": "CLIP Text Encode (Negative Prompt)"
+        }
+      },
+      "751": {
+        "class_type": "BetaSamplingScheduler",
+        "inputs": {
+          "steps": 26,
+          "alpha": 0.45000000000000007,
+          "beta": 0.44999999999999984,
+          "model": [
+            "701",
+            0
+          ]
+        },
+        "_meta": {
+          "title": "BetaSamplingScheduler"
+        }
+      }
+    }
+  COMFYUI_WORKFLOW_NODES: |
+    [
+      {
+        "type": "model",
+        "node_ids": [
+          "731"
+        ],
+        "key": "unet_name"
+      },
+      {
+        "type": "prompt",
+        "node_ids": [
+          "748"
+        ],
+        "key": "text"
+      },
+      {
+        "type": "negative_prompt",
+        "node_ids": [
+          "749"
+        ],
+        "key": "text"
+      },
+      {
+        "type": "width",
+        "node_ids": [
+          "737"
+        ],
+        "key": "width"
+      },
+      {
+        "type": "height",
+        "node_ids": [
+          "737"
+        ],
+        "key": "height"
+      },
+      {
+        "type": "seed",
+        "node_ids": [
+          "718"
+        ],
+        "key": "noise_seed"
+      },
+      {
+        "type": "steps",
+        "node_ids": [
+          "751"
+        ],
+        "key": "steps"
+      }
+    ]
+  # --- ComfyUI image EDIT (separate from generation above; see values.yaml) ---
+  ENABLE_IMAGE_EDIT: "true"
+  # IMAGE_EDIT_ENGINE=comfyui switches the image-edit engine to ComfyUI. The
+  # workflow + node mapping are injected via env from the openwebui-env ConfigMap.
+  # IMAGE_EDIT_MODEL is REQUIRED: Open WebUI injects it into the edit workflow's
+  # model node (UNETLoader -> unet_name); must match the file the UNETLoader loads.
+  IMAGE_EDIT_ENGINE: comfyui
+  IMAGE_EDIT_MODEL: unet.safetensors
+  IMAGES_EDIT_COMFYUI_BASE_URL: http://192.168.0.6:8188
+  IMAGES_EDIT_COMFYUI_WORKFLOW: |
+    {
+      "731": {
+        "class_type": "UNETLoader",
+        "inputs": {
+          "unet_name": "unet.safetensors",
+          "weight_dtype": "default"
+        },
+        "_meta": {
+          "title": "UNETLoader"
+        }
+      },
+      "701": {
+        "class_type": "ModelSamplingAuraFlow",
+        "inputs": {
+          "shift": 1,
+          "model": [
+            "731",
+            0
+          ]
+        },
+        "_meta": {
+          "title": "Flow Shift"
+        }
+      },
+      "733": {
+        "class_type": "CLIPLoader",
+        "inputs": {
+          "clip_name": "text_encoder.safetensors",
+          "type": "sd3",
+          "device": "default"
+        },
+        "_meta": {
+          "title": "CLIPLoader"
+        }
+      },
+      "741": {
+        "class_type": "T5TokenizerOptions",
+        "inputs": {
+          "min_padding": 0,
+          "min_length": 0,
+          "clip": [
+            "733",
+            0
+          ]
+        },
+        "_meta": {
+          "title": "T5TokenizerOptions"
+        }
+      },
+      "748": {
+        "class_type": "CLIPTextEncode",
+        "inputs": {
+          "text": "enhance the image, highly detailed, sharp focus",
+          "clip": [
+            "741",
+            0
+          ]
+        },
+        "_meta": {
+          "title": "CLIP Text Encode (Positive)"
+        }
+      },
+      "749": {
+        "class_type": "CLIPTextEncode",
+        "inputs": {
+          "text": "blurry, low quality, deformed, watermark",
+          "clip": [
+            "741",
+            0
+          ]
+        },
+        "_meta": {
+          "title": "CLIP Text Encode (Negative)"
+        }
+      },
+      "801": {
+        "class_type": "LoadImage",
+        "inputs": {
+          "image": "base.png"
+        },
+        "_meta": {
+          "title": "LoadImage (base)"
+        }
+      },
+      "710": {
+        "class_type": "VAELoader",
+        "inputs": {
+          "vae_name": "vae.safetensors"
+        },
+        "_meta": {
+          "title": "VAELoader"
+        }
+      },
+      "802": {
+        "class_type": "VAEEncode",
+        "inputs": {
+          "pixels": [
+            "801",
+            0
+          ],
+          "vae": [
+            "710",
+            0
+          ]
+        },
+        "_meta": {
+          "title": "VAEEncode (base)"
+        }
+      },
+      "803": {
+        "class_type": "KSamplerAdvanced",
+        "inputs": {
+          "noise_seed": 12345,
+          "add_noise": "enable",
+          "model": [
+            "701",
+            0
+          ],
+          "positive": [
+            "748",
+            0
+          ],
+          "negative": [
+            "749",
+            0
+          ],
+          "latent_image": [
+            "802",
+            0
+          ],
+          "sampler_name": "euler",
+          "scheduler": "beta",
+          "cfg": 3.8,
+          "steps": 26,
+          "start_at_step": 8,
+          "end_at_step": 25,
+          "return_with_leftover_noise": "disable"
+        },
+        "_meta": {
+          "title": "KSamplerAdvanced (edit)"
+        }
+      },
+      "804": {
+        "class_type": "VAEDecode",
+        "inputs": {
+          "samples": [
+            "803",
+            0
+          ],
+          "vae": [
+            "710",
+            0
+          ]
+        },
+        "_meta": {
+          "title": "VAEDecode (out)"
+        }
+      },
+      "740": {
+        "class_type": "SaveImage",
+        "inputs": {
+          "filename_prefix": "ComfyUI",
+          "images": [
+            "804",
+            0
+          ]
+        },
+        "_meta": {
+          "title": "SaveImage"
+        }
+      }
+    }
+  IMAGES_EDIT_COMFYUI_WORKFLOW_NODES: |
+    [
+      {
+        "type": "model",
+        "node_ids": [
+          "731"
+        ],
+        "key": "unet_name"
+      },
+      {
+        "type": "prompt",
+        "node_ids": [
+          "748"
+        ],
+        "key": "text"
+      },
+      {
+        "type": "image",
+        "node_ids": [
+          "801"
+        ],
+        "key": "image"
+      },
+      {
+        "type": "seed",
+        "node_ids": [
+          "803"
+        ],
+        "key": "noise_seed"
+      }
+    ]

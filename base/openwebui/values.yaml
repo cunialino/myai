@@ -63,6 +63,56 @@ extraEnvVars:
         name: openwebui-env
         key: TOOL_SERVER_CONNECTIONS
 
+  # --- ComfyUI image generation (see config-env.yaml) ---
+  - name: ENABLE_IMAGE_GENERATION
+    value: "true"
+  # IMAGE_GENERATION_ENGINE=comfyui switches Open WebUI's image engine on. The
+  # workflow + node mapping are injected via env from the openwebui-env ConfigMap.
+  # COMFYUI_BASE_URL points at the Strix Halo ComfyUI (comfyui.Containerfile, :8188).
+  # IMAGE_GENERATION_MODEL is REQUIRED: Open WebUI injects it into the workflow's
+  # model node (UNETLoader -> unet_name); an empty value would blank it and break
+  # generation. It must match the file the UNETLoader loads.
+  - name: IMAGE_GENERATION_ENGINE
+    value: comfyui
+  - name: IMAGE_GENERATION_MODEL
+    value: unet.safetensors
+  - name: COMFYUI_BASE_URL
+    value: http://192.168.0.6:8188
+  - name: COMFYUI_WORKFLOW
+    valueFrom:
+      configMapKeyRef:
+        name: openwebui-env
+        key: COMFYUI_WORKFLOW
+  - name: COMFYUI_WORKFLOW_NODES
+    valueFrom:
+      configMapKeyRef:
+        name: openwebui-env
+        key: COMFYUI_WORKFLOW_NODES
+
+  # --- ComfyUI image EDIT (separate engine switch from generation above) ---
+  # ENABLE_IMAGE_EDIT turns on Open WebUI's image-edit path; IMAGE_EDIT_ENGINE=comfyui
+  # selects ComfyUI. The edit workflow + node mapping are injected via env from the
+  # openwebui-env ConfigMap. The edit path uploads the user's image to ComfyUI and
+  # injects its name into the workflow's LoadImage node (see IMAGES_EDIT_COMFYUI_WORKFLOW_NODES).
+  - name: ENABLE_IMAGE_EDIT
+    value: "true"
+  - name: IMAGE_EDIT_ENGINE
+    value: comfyui
+  - name: IMAGE_EDIT_MODEL
+    value: unet.safetensors
+  - name: IMAGES_EDIT_COMFYUI_BASE_URL
+    value: http://192.168.0.6:8188
+  - name: IMAGES_EDIT_COMFYUI_WORKFLOW
+    valueFrom:
+      configMapKeyRef:
+        name: openwebui-env
+        key: IMAGES_EDIT_COMFYUI_WORKFLOW
+  - name: IMAGES_EDIT_COMFYUI_WORKFLOW_NODES
+    valueFrom:
+      configMapKeyRef:
+        name: openwebui-env
+        key: IMAGES_EDIT_COMFYUI_WORKFLOW_NODES
+
   # The chart derives WEBUI_URL from ingress.host, which yields the bare tailnet
   # short name "https://chat". The tailscale operator upgrades the *Ingress* to
   # chat.tail2f38ea.ts.net, but Open WebUI builds share links, OAuth redirects and
