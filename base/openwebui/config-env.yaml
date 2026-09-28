@@ -9,16 +9,19 @@ metadata:
   name: openwebui-env
   namespace: openwebui
 data:
-  # 0 -> http://192.168.0.6:8731/v1   (Strix Halo, local)
-  # 1 -> http://192.168.0.6:11434/v1  (Strix Halo, external)
+  # 0 -> http://192.168.0.6:11434/v1  (Strix Halo, llama-swap: everything lives here)
   #
   # connection_type is functional, not cosmetic: utils/task.py picks
-  # task.model.default for "local" models and task.model.external otherwise.
-  # Omitting this key entirely would make both connections "external".
+  # task.model.default for "local" models and task.model.external otherwise, and
+  # the model selector groups/filters on it. TASK_MODEL / TASK_MODEL_EXTERNAL are
+  # both unset here so the task path is inert today; "local" is the honest label
+  # for a LAN llama-swap box and keeps its models grouped under "Local".
+  #
+  # model_ids stays empty on purpose: a non-empty list makes Open WebUI skip the
+  # endpoint's /models and serve the static list instead, which would freeze the
+  # llama-swap aliases. Drop unwanted models in llama-swap, not here.
   OPENAI_API_CONFIGS: >-
     {"0":{"enable":true,"connection_type":"local","auth_type":"none","tags":[],
-    "model_ids":[],"prefix_id":"","passthrough_params":[]},
-    "1":{"enable":true,"connection_type":"external","auth_type":"none","tags":[],
     "model_ids":[],"prefix_id":"","passthrough_params":[]}}
 
   # MCP tool servers. Registered at startup by set_tool_servers() (main.py:422),

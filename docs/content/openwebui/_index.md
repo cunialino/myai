@@ -24,11 +24,14 @@ is multi-source:
 
 Key settings in [`values.yaml`](https://github.com/cunialino/myai/tree/main/base/openwebui/values.yaml):
 
-- `openaiBaseApiUrls` — list of OpenAI-compatible endpoints, both on the
-  Strix Halo box (`192.168.0.6`): `:8731` and `:11434` (`llama.cpp`).
-  Nothing in-cluster any more — the `llms` namespace llama server is gone.
-- `openaiApiKeys: [no-key, no-key]` — one key per URL, same order; the
-  local servers do not authenticate. The two lists must stay the same length.
+- `openaiBaseApiUrls` — a single OpenAI-compatible endpoint: `:11434` on the
+  Strix Halo box (`192.168.0.6`), where `llama-swap` now serves every model.
+  Nothing in-cluster any more — the `llms` namespace llama server and the old
+  `:8731` listener are both gone. A stale URL cannot be left here as a
+  "disabled" entry: Open WebUI fetches all URLs in parallel and waits for each,
+  so a dead one stalls every model-list refresh.
+- `openaiApiKeys: [no-key]` — one key per URL, same order; the local server
+  does not authenticate. The two lists must stay the same length.
 - Postgres via the shared CNPG cluster: `DATABASE_TYPE=postgresql`,
   `DATABASE_HOST=pg-cluster-rw.cnpg-system.svc.cluster.local`,
   `DATABASE_NAME=openwebui`, user/password from the `openwebui-db` secret.
@@ -52,7 +55,12 @@ Key settings in [`values.yaml`](https://github.com/cunialino/myai/tree/main/base
 
 ## Usage
 
-The Strix Halo endpoints are always on, so their models appear in the model
+The Strix Halo endpoint is always on, so its models appear in the model
 selector right away (via `models.fetch` / the OpenAI URL) — pick one in the UI.
+`llama-swap` serves them lazily: the first request for a model that is not the
+loaded one swaps processes, so that request pays the load time and the previous
+model is unloaded. Model ids and aliases are whatever `llama-swap` publishes on
+`/v1/models`; Open WebUI discovers them live (`model_ids` is deliberately left
+empty, because setting it makes Open WebUI ignore the endpoint's own list).
 If the model supports tool calling, the Tools/MCP pages inside Open WebUI work
 against it.

@@ -26,14 +26,14 @@ websocket:
   redis:
     enabled: false
 
-# Chat models live on the Strix Halo and are consumed as an external LAN service.
-# The dead http://llamacpp-svc-proxy.llms.svc.cluster.local:8080/v1 that the
-# Admin UI had kept pinned (disabled, but still listed) is gone for good.
+# Chat models live on the Strix Halo behind llama-swap (:11434), which is now the
+# single OpenAI-compatible endpoint for the whole box. The old :8731 listener is
+# gone; a dead entry here is not merely cosmetic — get_all_models_responses()
+# fans out over every URL in parallel and waits on all of them, so keeping it
+# made each model-list refresh stall on a connect timeout. Drop it, don't disable it.
 openaiBaseApiUrls:
-  - http://192.168.0.6:8731/v1
   - http://192.168.0.6:11434/v1
 openaiApiKeys:
-  - no-key
   - no-key
 
 extraEnvVars:

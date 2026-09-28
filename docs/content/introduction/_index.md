@@ -68,7 +68,7 @@ All services are reachable through the tailnet (no public exposure):
 {% mermaid() %}
 flowchart TB
     subgraph halo_box["Strix Halo - elcunhalo / 192.168.0.6 (outside the cluster)"]
-        halo["llama.cpp<br/>chat models :11434"]
+        halo["llama-swap → llama.cpp<br/>all models :11434"]
     end
 
     subgraph tailnet["Tailscale tailnet"]
