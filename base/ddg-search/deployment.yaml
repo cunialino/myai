@@ -41,13 +41,18 @@ kind: Service
 metadata:
   name: ddg-search
   namespace: ddg-search
+  annotations:
+    # Cilium LB VIP advertised on the LAN via kube-vip (same mechanism as
+    # garage-svc -> 192.168.0.200). Reaches the MCP server directly over the
+    # LAN without going through a Tailscale ingress.
+    lbipam.cilium.io/ips: "192.168.0.202"
 spec:
   selector:
     app: ddg-search
   ports:
     - port: 80
       targetPort: 8000
-  type: ClusterIP
+  type: LoadBalancer
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
