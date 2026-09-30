@@ -46,7 +46,422 @@ data:
     "access_grants":[{"permission":"read","principal_id":"*","principal_type":"user"}],
     "function_name_filter_list":""}}]
 
-  # Image generation / edit settings are plain scalars and live in values.yaml
-  # (extraEnvVars). The ComfyUI workflow blobs that used to sit here are gone:
-  # ComfyUI on :8188 is dead and Qwen-Image-2.1 is served by gufo behind
-  # llama-swap's OpenAI-compatible /v1/images/{generations,edits} endpoints.
+  COMFYUI_WORKFLOW: |
+    {
+      "1": {
+        "inputs": {
+          "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+          "weight_dtype": "default"
+        },
+        "class_type": "UNETLoader",
+        "_meta": {
+          "title": "Load Diffusion Model"
+        }
+      },
+      "2": {
+        "inputs": {
+          "lora_name": "qwen_21_lr.safetensors",
+          "strength_model": 0.8,
+          "model": [
+            "1",
+            0
+          ]
+        },
+        "class_type": "LoraLoaderModelOnly",
+        "_meta": {
+          "title": "lr"
+        }
+      },
+      "4": {
+        "inputs": {
+          "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+          "type": "qwen_image",
+          "device": "default"
+        },
+        "class_type": "CLIPLoader",
+        "_meta": {
+          "title": "Text Encoder"
+        }
+      },
+      "5": {
+        "inputs": {
+          "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+        },
+        "class_type": "VAELoader",
+        "_meta": {
+          "title": "Load VAE"
+        }
+      },
+      "6": {
+        "inputs": {
+          "prompt": "Cinematic landscape photograph of a vast mountain valley at golden hour.\nSubject: towering snow-capped peaks behind layered blue atmospheric haze, glacial snowmelt feeding a winding crystal-clear river that snakes through terraced green meadows dotted with wildflowers.\nForeground: dense layered forest of pines, firs and autumn-coloured deciduous trees on the rolling hillsides, thin mist drifting between the trunks, a weathered wooden fence post and a moss-covered boulder for scale.\nFraming: wide-angle composition from a low camera position, tack-sharp foreground detail, the river as a leading line through the middle ground, ridge lines on the upper third, natural depth of field.\nPhoto Style: a crisp, high-resolution iPhone 15 Pro Max photo on the 48MP main sensor, hyper-realistic film grain, precise edge definition, immaculate uncompressed digital clarity.\nLighting: bright airy daylight raking across the valley from one side, soft fill that lifts every shadow into a gentle haze, faint warmth catching the ridge lines and the mist for a weightless glow.\nSky: high cirrus streaks over a clear gradient blue, a bank of soft cumulus building around the highest summit.",
+          "negative_prompt": "extra legs, extra limbs, merged limbs, missing legs, malformed thighs, fused legs, extra arms",
+          "resolution": 1024,
+          "clip": [
+            "4",
+            0
+          ],
+          "vae": [
+            "5",
+            0
+          ]
+        },
+        "class_type": "TextEncodeQwenImage21",
+        "_meta": {
+          "title": "Text Encode Qwen Image 2.1"
+        }
+      },
+      "7": {
+        "inputs": {
+          "width": 1024,
+          "height": 1024,
+          "batch_size": 1
+        },
+        "class_type": "EmptyLatentImage",
+        "_meta": {
+          "title": "Empty Latent Image"
+        }
+      },
+      "8": {
+        "inputs": {
+          "seed": 99138336420017,
+          "steps": 25,
+          "cfg": 5,
+          "sampler_name": "er_sde",
+          "scheduler": "beta",
+          "denoise": 1,
+          "model": [
+            "2",
+            0
+          ],
+          "positive": [
+            "6",
+            0
+          ],
+          "negative": [
+            "6",
+            1
+          ],
+          "latent_image": [
+            "7",
+            0
+          ]
+        },
+        "class_type": "KSampler",
+        "_meta": {
+          "title": "KSampler"
+        }
+      },
+      "9": {
+        "inputs": {
+          "samples": [
+            "8",
+            0
+          ],
+          "vae": [
+            "5",
+            0
+          ]
+        },
+        "class_type": "VAEDecode",
+        "_meta": {
+          "title": "VAE Decode"
+        }
+      },
+      "10": {
+        "inputs": {
+          "filename_prefix": "Qwen2.1/t2i",
+          "images": [
+            "9",
+            0
+          ]
+        },
+        "class_type": "SaveImage",
+        "_meta": {
+          "title": "Save Image"
+        }
+      }
+    }
+
+
+  # Generation mapping. "model" is why IMAGE_GENERATION_MODEL is mandatory: it lands in
+  # UNETLoader.unet_name, and get_image_model() returns "" when that env var is empty,
+  # which blanks the node. It is also what GET /images/models reads back (first "model"
+  # node -> its class_type -> the first *_name entry in /object_info), so the UI
+  # dropdown lists the files that are really in ComfyUI's diffusers dir.
+  #
+  # Every mapped field is written unconditionally, so the payload must always supply it:
+  # IMAGE_STEPS has to stay set because routers/images.py adds "steps" to the payload
+  # only when IMAGE_STEPS or form_data.steps is non-None, and the builtin generate_image
+  # tool sends neither — unset IMAGE_STEPS writes "steps": null into node 8 and
+  # ComfyUI's validator does int(None) -> TypeError -> the whole prompt is refused.
+  # IMAGE_SIZE and CreateImageForm.n=1 keep width/height/n honest the same way.
+  #
+  # negative_prompt is deliberately NOT mapped. The builtin generate_image tool posts
+  # CreateImageForm(prompt=...) only, and ComfyUI stringifies a None on a STRING input
+  # into the literal word "None": not an error, just a silent negative that overwrites
+  # the anatomy list baked into node 6. Re-add
+  # {"type":"negative_prompt","node_ids":["6"],"key":"negative_prompt"} if every caller
+  # really sends one (the chat UI does, tool calls do not).
+
+  COMFYUI_WORKFLOW_NODES: |
+    [
+      {
+        "type": "model",
+        "node_ids": [
+          "1"
+        ],
+        "key": "unet_name"
+      },
+      {
+        "type": "prompt",
+        "node_ids": [
+          "6"
+        ],
+        "key": "prompt"
+      },
+      {
+        "type": "width",
+        "node_ids": [
+          "7"
+        ],
+        "key": "width"
+      },
+      {
+        "type": "height",
+        "node_ids": [
+          "7"
+        ],
+        "key": "height"
+      },
+      {
+        "type": "n",
+        "node_ids": [
+          "7"
+        ],
+        "key": "batch_size"
+      },
+      {
+        "type": "steps",
+        "node_ids": [
+          "8"
+        ],
+        "key": "steps"
+      },
+      {
+        "type": "seed",
+        "node_ids": [
+          "8"
+        ],
+        "key": "seed"
+      }
+    ]
+
+
+  # --- Image EDIT graph (its own switch: IMAGE_EDIT_ENGINE=comfyui) ---
+  # Node 15 LoadImage is the only Open WebUI-relevant difference from the generation
+  # graph: image_edits() uploads every attachment to ComfyUI's /upload/image and writes
+  # the returned filename into it. EmptyLatentImage (node 7) fixes the output size, so
+  # the reference's aspect ratio is NOT preserved — 1024x1024 unless node 7 changes or
+  # IMAGE_EDIT_SIZE is set, in which case width/height must be mapped below too.
+
+  IMAGES_EDIT_COMFYUI_WORKFLOW: |
+    {
+      "1": {
+        "inputs": {
+          "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+          "weight_dtype": "default"
+        },
+        "class_type": "UNETLoader",
+        "_meta": {
+          "title": "Load Diffusion Model"
+        }
+      },
+      "2": {
+        "inputs": {
+          "lora_name": "qwen_21_lr.safetensors",
+          "strength_model": 0.8,
+          "model": [
+            "1",
+            0
+          ]
+        },
+        "class_type": "LoraLoaderModelOnly",
+        "_meta": {
+          "title": "lr"
+        }
+      },
+      "4": {
+        "inputs": {
+          "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+          "type": "qwen_image",
+          "device": "default"
+        },
+        "class_type": "CLIPLoader",
+        "_meta": {
+          "title": "Text Encoder"
+        }
+      },
+      "5": {
+        "inputs": {
+          "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+        },
+        "class_type": "VAELoader",
+        "_meta": {
+          "title": "Load VAE"
+        }
+      },
+      "6": {
+        "inputs": {
+          "prompt": "Re-photograph the landscape from <image1> at golden hour: keep its composition, camera position and geography, but move the sun low so it rakes across the ridge lines and throws long shadows across the valley floor.\nAdd thin mist pooling in the hollows and warm rim light on the treetops, wildflowers scattered through the foreground meadow, and a band of high cirrus clouds above the peaks.\nStyle: crisp high-resolution landscape photograph, hyper-realistic, natural colour, precise edge definition, subtle film grain.",
+          "negative_prompt": "low quality, blurry, watermark, text, signature, extra limbs, deformed hands, plastic skin, oversaturated, airbrushed",
+          "resolution": 1024,
+          "clip": [
+            "4",
+            0
+          ],
+          "images.image_1": [
+            "15",
+            0
+          ],
+          "vae": [
+            "5",
+            0
+          ]
+        },
+        "class_type": "TextEncodeQwenImage21",
+        "_meta": {
+          "title": "Text Encode Qwen Image 2.1"
+        }
+      },
+      "7": {
+        "inputs": {
+          "width": 1024,
+          "height": 1024,
+          "batch_size": 1
+        },
+        "class_type": "EmptyLatentImage",
+        "_meta": {
+          "title": "Empty Latent Image"
+        }
+      },
+      "8": {
+        "inputs": {
+          "seed": 889157198927355,
+          "steps": 20,
+          "cfg": 5,
+          "sampler_name": "er_sde",
+          "scheduler": "beta",
+          "denoise": 1,
+          "model": [
+            "2",
+            0
+          ],
+          "positive": [
+            "6",
+            0
+          ],
+          "negative": [
+            "6",
+            1
+          ],
+          "latent_image": [
+            "7",
+            0
+          ]
+        },
+        "class_type": "KSampler",
+        "_meta": {
+          "title": "KSampler"
+        }
+      },
+      "9": {
+        "inputs": {
+          "samples": [
+            "8",
+            0
+          ],
+          "vae": [
+            "5",
+            0
+          ]
+        },
+        "class_type": "VAEDecode",
+        "_meta": {
+          "title": "VAE Decode"
+        }
+      },
+      "10": {
+        "inputs": {
+          "filename_prefix": "Qwen2.1/edit",
+          "images": [
+            "9",
+            0
+          ]
+        },
+        "class_type": "SaveImage",
+        "_meta": {
+          "title": "Save Image"
+        }
+      },
+      "15": {
+        "inputs": {
+          "image": "pasted/image (4).png"
+        },
+        "class_type": "LoadImage",
+        "_meta": {
+          "title": "Load Image"
+        }
+      }
+    }
+
+
+  # Edit mapping. The type set is smaller than the generation one on purpose:
+  # ComfyUIEditImageForm carries {image, prompt, width?, height?, n?, steps?, seed?},
+  # and image_edits() fills width/height only when a size is configured and n only when
+  # the caller passes one — mapping "width", "height", "n" or "steps" here would write
+  # null into INT widgets and fail /prompt validation. "negative_prompt" is worse: the
+  # form has no such field, so _apply_workflow_nodes raises AttributeError inside
+  # comfyui_edit_image, which catches it and returns None -> "failed to edit image".
+  # Keep the edit negative baked into node 6.
+  #
+  # "image" consumes one uploaded name per listed node_id, so multi-reference edits mean
+  # one LoadImage node per image with their ids in order, plus the matching
+  # images.image_2, images.image_3, ... slots on node 6 — a graph change, not a mapping
+  # change.
+  #
+  # IMAGE_EDIT_MODEL is used only when the caller omits "model" (the builtin edit_image
+  # tool does); a chat model passing its own model string would have it injected into
+  # unet_name verbatim.
+
+  IMAGES_EDIT_COMFYUI_WORKFLOW_NODES: |
+    [
+      {
+        "type": "model",
+        "node_ids": [
+          "1"
+        ],
+        "key": "unet_name"
+      },
+      {
+        "type": "prompt",
+        "node_ids": [
+          "6"
+        ],
+        "key": "prompt"
+      },
+      {
+        "type": "image",
+        "node_ids": [
+          "15"
+        ],
+        "key": "image"
+      },
+      {
+        "type": "seed",
+        "node_ids": [
+          "8"
+        ],
+        "key": "seed"
+      }
+    ]

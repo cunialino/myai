@@ -63,67 +63,88 @@ extraEnvVars:
         name: openwebui-env
         key: TOOL_SERVER_CONNECTIONS
 
-  # --- Image generation: Qwen-Image-2.1 (gufo) behind llama-swap ---
-  # Engine is "openai", not "comfyui": gufo serves Qwen-Image-2.1 on the standard
-  # /v1/images/generations + /v1/images/edits routes and llama-swap proxies both
-  # (modelPostJSONRoutes / modelPostFormRoutes in internal/server/server.go). Only
-  # :11434 is reachable from the cluster, so the proxy is also the only path. The
-  # ComfyUI workflow/node blobs that used to back this are deleted: ComfyUI on
-  # :8188 is dead and its SD3-shaped graph (UNETLoader + CLIPLoader type:sd3 +
-  # EmptySD3LatentImage) could not drive Qwen-Image anyway.
+  # --- Image generation: Qwen-Image-2.1 on ComfyUI (Strix Halo, :8188) ---
+  # Engine "comfyui": Open WebUI posts the workflow from config-env.yaml to
+  # /prompt, waits for completion on /ws?clientId=... and then fetches the result
+  # through /view. Both the HTTP and the WebSocket side must therefore stay
+  # reachable from the cluster, which plain :8188 on the LAN is (11434, the
+  # llama-swap port, is the only other one open).
+  #
+  # To fall back to gufo behind llama-swap while ComfyUI is off, restore exactly:
+  #   IMAGE_GENERATION_ENGINE=openai  IMAGE_EDIT_ENGINE=openai
+  #   IMAGE_GENERATION_MODEL=qwen-image-2.1  IMAGE_EDIT_MODEL=qwen-image-2.1
+  #   IMAGES_OPENAI_API_BASE_URL / IMAGES_EDIT_OPENAI_API_BASE_URL = http://192.168.0.6:11434/v1
+  #   IMAGES_OPENAI_API_KEY / IMAGES_EDIT_OPENAI_API_KEY = no-key
+  #   IMAGES_OPENAI_PARAMS='{"steps": 25}'
   - name: ENABLE_IMAGE_GENERATION
     value: "true"
   - name: IMAGE_GENERATION_ENGINE
-    value: openai
-  # Must equal gufo's --served-model-name: gufo replies 404 "requested image model
-  # is not loaded" for anything else (src/cli/serve/image_api.cpp). Open WebUI sends
-  # exactly this value on the generation path — get_image_model() ignores whatever
-  # the UI picks, and the Settings > Images dropdown is hardcoded DALL-E/GPT-IMAGE
-  # filler for the openai engine. Do not "save" it in the UI anyway: with
-  # ENABLE_PERSISTENT_CONFIG=false the write is in-process and shadows this env
-  # value until the pod restarts.
+    value: comfyui
+  # Injected into the workflow's UNETLoader.unet_name (the type:model node in
+  # COMFYUI_WORKFLOW_NODES), so it must be a file that exists in ComfyUI's
+  # diffusion_models dir. get_image_model() returns "" when this is empty, which
+  # blanks the node — it is not an optional hint. The UI dropdown is built from
+  # /object_info for that same node, so the two can never disagree.
   - name: IMAGE_GENERATION_MODEL
-    value: qwen-image-2.1
-  - name: IMAGES_OPENAI_API_BASE_URL
-    value: http://192.168.0.6:11434/v1
-  - name: IMAGES_OPENAI_API_KEY
-    value: no-key
-  # Chart default is 512x512, which quietly halves Qwen-Image quality. gufo wants
-  # multiples of 32, <=4096 per side, <=4 MP.
+    value: qwen_image_2.1_int8_convrot.safetensors
+  - name: COMFYUI_BASE_URL
+    value: http://192.168.0.6:8188
+  - name: COMFYUI_WORKFLOW
+    valueFrom:
+      configMapKeyRef:
+        name: openwebui-env
+        key: COMFYUI_WORKFLOW
+  - name: COMFYUI_WORKFLOW_NODES
+    valueFrom:
+      configMapKeyRef:
+        name: openwebui-env
+        key: COMFYUI_WORKFLOW_NODES
+  # Written into EmptyLatentImage and, unlike the old openai path, into the graph on
+  # every request: 1024x1024 is what Qwen-Image-2.1 is trained at (multiples of 32,
+  # <=4096 per side). The chart default of 512x512 degrades it badly.
   - name: IMAGE_SIZE
     value: "1024x1024"
-  # Merged verbatim into the generations JSON body. gufo rejects any parameter
-  # outside {prompt, model, n, size, response_format, output_format, quality,
-  # background, user, seed, steps, stream}, so only gufo keys may appear here.
-  # steps defaults to 40 (range 2-100); 25 roughly halves the ~95s/image at a small
-  # quality cost. Never pin seed here — every image would come out identical.
-  - name: IMAGES_OPENAI_PARAMS
-    value: '{"steps": 25}'
+  # Written into KSampler.steps. Keep this set: the builtin generate_image tool sends
+  # no steps, and Open WebUI then puts null in the payload, which ComfyUI rejects
+  # outright (int(None)). 25 matches the tuned export and is roughly half the time of
+  # the model's 40-step default.
+  - name: IMAGE_STEPS
+    value: "25"
 
-  # --- Image EDIT: same endpoint, separate engine switch ---
-  # Open WebUI posts multipart to /v1/images/edits with field "image" for a single
-  # upload or "image[]" for several; gufo's parser accepts both names. n / size /
-  # background are omitted when unset, negative_prompt is never forwarded, and
-  # response_format=b64_json is exactly what gufo requires. There is no edit button
-  # in the 0.11.3 UI: the chat model calls the builtin edit_image tool with the
-  # URLs of the images attached to the chat (utils/tools.py:704).
+  # --- Image EDIT: separate engine switch, its own workflow ---
+  # Open WebUI uploads each attachment to ComfyUI's /upload/image, writes the returned
+  # filename into the workflow's LoadImage node, then queues the graph. There is no
+  # edit button in the 0.11.x UI: the chat model calls the builtin edit_image tool with
+  # the URLs of the images attached to the chat (utils/tools.py).
   - name: ENABLE_IMAGE_EDIT
     value: "true"
   - name: IMAGE_EDIT_ENGINE
-    value: openai
+    value: comfyui
+  # Same file as IMAGE_GENERATION_MODEL; used only when the caller omits "model",
+  # which the builtin edit_image tool does.
   - name: IMAGE_EDIT_MODEL
-    value: qwen-image-2.1
-  - name: IMAGES_EDIT_OPENAI_API_BASE_URL
-    value: http://192.168.0.6:11434/v1
-  - name: IMAGES_EDIT_OPENAI_API_KEY
-    value: no-key
-  # IMAGE_EDIT_SIZE stays unset on purpose: empty makes Open WebUI omit `size`, so
-  # gufo keeps the reference image's aspect ratio.
+    value: qwen_image_2.1_int8_convrot.safetensors
+  - name: IMAGES_EDIT_COMFYUI_BASE_URL
+    value: http://192.168.0.6:8188
+  - name: IMAGES_EDIT_COMFYUI_WORKFLOW
+    valueFrom:
+      configMapKeyRef:
+        name: openwebui-env
+        key: IMAGES_EDIT_COMFYUI_WORKFLOW
+  - name: IMAGES_EDIT_COMFYUI_WORKFLOW_NODES
+    valueFrom:
+      configMapKeyRef:
+        name: openwebui-env
+        key: IMAGES_EDIT_COMFYUI_WORKFLOW_NODES
+  # IMAGE_EDIT_SIZE stays unset on purpose: the edit mapping carries no width/height
+  # nodes (see config-env.yaml), so setting it would do nothing but mislead.
 
-  # Cold-start headroom. The image snapshot is ~33 GB and Open WebUI's aiohttp
-  # client gives up at 300s (env.py AIOHTTP_CLIENT_TIMEOUT) — that is precisely the
-  # "POST /v1/images/generations 502 ... 5m0.12s" line in the llama-swap log. Global
-  # knob, so it lifts every outbound call, not just images.
+  # Cold-start headroom. Loading the ~25 GB int8 UNET plus the 8B text encoder takes
+  # minutes, and the ComfyUI path holds a single /ws connection for the whole run: the
+  # shared aiohttp ClientSession timeout (env.py AIOHTTP_CLIENT_TIMEOUT, 300s default)
+  # bounds that socket too, so a long generation dies as "WebSocket closed
+  # unexpectedly" rather than producing an image. Global knob, so it lifts every
+  # outbound call, not just images.
   - name: AIOHTTP_CLIENT_TIMEOUT
     value: "900"
 
