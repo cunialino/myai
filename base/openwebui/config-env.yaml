@@ -46,6 +46,31 @@ data:
     "access_grants":[{"permission":"read","principal_id":"*","principal_type":"user"}],
     "function_name_filter_list":""}}]
 
+  # --- Image GENERATION graph (Qwen-Image-2.1 + viggle-turbo) ---
+  # Model chain: UNETLoader(1) -> LoraLoaderModelOnly(2, qwen_21_lr @ 0.8) ->
+  # ViggleTurboLora(3, the turbo adapter at strength 1.0). Node 3 is the pack's own
+  # loader rather than the stock one on purpose: it applies the LoRA at runtime as a
+  # side branch (y = Wx + BAx), while LoraLoaderModelOnly merges it into the weights,
+  # which loses part of this adapter's update on bf16 and requantizes with noise on
+  # int8. Keep its strength at 1.0.
+  #
+  # Sampling is SamplerCustom(8) + KSamplerSelect(11, er_sde) + ViggleTurboSigmas(12),
+  # i.e. no KSampler and therefore no steps/scheduler/denoise widget: the step count is
+  # node 12's sigma string ("1.0, 0.9375, 0.875, 0.75, 0.5, 0.25" = 6 steps; the node
+  # appends the terminating 0 itself). Its "latent" input is load-bearing — the node
+  # derives the pipeline's resolution-dependent shift from the token count of that
+  # latent, so it must be exactly the latent that feeds the sampler (node 7), and it
+  # then tracks Open WebUI's width/height writes for free.
+  #
+  # cfg 4 / er_sde / add_noise=true are the values of the tuned local export
+  # (qwen_21_t2i_turbo.json). Upstream's own workflow pairs the sigmas node with euler
+  # + BasicGuider at cfg 1 and no negative prompt, so node 8 is the knob to revisit
+  # first if turbo output looks soft or over-cooked.
+  #
+  # ViggleTurboLora and ViggleTurboSigmas are custom nodes (Viggle's comfyui/
+  # viggle_turbo.py dropped into ComfyUI/custom_nodes/ on elcunhalo, and the LoRA file
+  # into its loras/ dir). Without them /prompt rejects the graph outright — both image
+  # paths fail, not just the turbo part.
   COMFYUI_WORKFLOW: |
     {
       "1": {
@@ -124,14 +149,11 @@ data:
       },
       "8": {
         "inputs": {
-          "seed": 99138336420017,
-          "steps": 25,
-          "cfg": 5,
-          "sampler_name": "er_sde",
-          "scheduler": "beta",
-          "denoise": 1,
+          "add_noise": true,
+          "noise_seed": 99138336420017,
+          "cfg": 4,
           "model": [
-            "2",
+            "3",
             0
           ],
           "positive": [
@@ -142,14 +164,22 @@ data:
             "6",
             1
           ],
+          "sampler": [
+            "11",
+            0
+          ],
+          "sigmas": [
+            "12",
+            0
+          ],
           "latent_image": [
             "7",
             0
           ]
         },
-        "class_type": "KSampler",
+        "class_type": "SamplerCustom",
         "_meta": {
-          "title": "KSampler"
+          "title": "sampler"
         }
       },
       "9": {
@@ -180,6 +210,42 @@ data:
         "_meta": {
           "title": "Save Image"
         }
+      },
+      "3": {
+        "inputs": {
+          "lora_name": "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors",
+          "strength": 1,
+          "model": [
+            "2",
+            0
+          ]
+        },
+        "class_type": "ViggleTurboLora",
+        "_meta": {
+          "title": "viggle turbo"
+        }
+      },
+      "11": {
+        "inputs": {
+          "sampler_name": "er_sde"
+        },
+        "class_type": "KSamplerSelect",
+        "_meta": {
+          "title": "sampler select"
+        }
+      },
+      "12": {
+        "inputs": {
+          "latent": [
+            "7",
+            0
+          ],
+          "nodes": "1.0, 0.9375, 0.875, 0.75, 0.5, 0.25"
+        },
+        "class_type": "ViggleTurboSigmas",
+        "_meta": {
+          "title": "viggle turbo sigmas"
+        }
       }
     }
 
@@ -191,11 +257,18 @@ data:
   # dropdown lists the files that are really in ComfyUI's diffusers dir.
   #
   # Every mapped field is written unconditionally, so the payload must always supply it:
-  # IMAGE_STEPS has to stay set because routers/images.py adds "steps" to the payload
-  # only when IMAGE_STEPS or form_data.steps is non-None, and the builtin generate_image
-  # tool sends neither — unset IMAGE_STEPS writes "steps": null into node 8 and
-  # ComfyUI's validator does int(None) -> TypeError -> the whole prompt is refused.
-  # IMAGE_SIZE and CreateImageForm.n=1 keep width/height/n honest the same way.
+  # IMAGE_SIZE and CreateImageForm.n=1 keep width/height/n honest. "seed" names
+  # SamplerCustom's widget (noise_seed) for the same reason: _apply_workflow_nodes writes
+  # workflow[id]['inputs'][key] verbatim, and when the payload carries no seed — the
+  # builtin generate_image tool never does — it substitutes random.randint(0, 2**50), so
+  # the value baked into node 8 is a placeholder.
+  #
+  # The "steps" entry went away with the KSampler: SamplerCustom has no steps widget (the
+  # count is node 12's sigma string), so mapping it would inject a key the node ignores
+  # and leave IMAGE_STEPS lying in the Admin UI. Reverting the turbo means restoring the
+  # KSampler node, the {"type":"steps","node_ids":["8"],"key":"steps"} entry and
+  # IMAGE_STEPS together — comfyui.py writes every mapped key even when its payload value
+  # is None, and ComfyUI's validator then does int(None) -> TypeError -> refused prompt.
   #
   # negative_prompt is deliberately NOT mapped. The builtin generate_image tool posts
   # CreateImageForm(prompt=...) only, and ComfyUI stringifies a None on a STRING input
@@ -242,18 +315,11 @@ data:
         "key": "batch_size"
       },
       {
-        "type": "steps",
-        "node_ids": [
-          "8"
-        ],
-        "key": "steps"
-      },
-      {
         "type": "seed",
         "node_ids": [
           "8"
         ],
-        "key": "seed"
+        "key": "noise_seed"
       }
     ]
 
@@ -264,6 +330,11 @@ data:
   # the returned filename into it. EmptyLatentImage (node 7) fixes the output size, so
   # the reference's aspect ratio is NOT preserved — 1024x1024 unless node 7 changes or
   # IMAGE_EDIT_SIZE is set, in which case width/height must be mapped below too.
+  #
+  # The turbo half (nodes 3, 11, 12 and the SamplerCustom in 8) is identical to the
+  # generation graph and to qwen_21_i2i_turbo.json: edits get the same 6-step er_sde
+  # schedule, and the turbo LoRA is just one extra node after qwen_21_lr (2), so nothing
+  # else in the edit chain moved. <image1> in the prompt is node 15's image.
 
   IMAGES_EDIT_COMFYUI_WORKFLOW: |
     {
@@ -347,14 +418,11 @@ data:
       },
       "8": {
         "inputs": {
-          "seed": 889157198927355,
-          "steps": 20,
-          "cfg": 5,
-          "sampler_name": "er_sde",
-          "scheduler": "beta",
-          "denoise": 1,
+          "add_noise": true,
+          "noise_seed": 889157198927355,
+          "cfg": 4,
           "model": [
-            "2",
+            "3",
             0
           ],
           "positive": [
@@ -365,14 +433,22 @@ data:
             "6",
             1
           ],
+          "sampler": [
+            "11",
+            0
+          ],
+          "sigmas": [
+            "12",
+            0
+          ],
           "latent_image": [
             "7",
             0
           ]
         },
-        "class_type": "KSampler",
+        "class_type": "SamplerCustom",
         "_meta": {
-          "title": "KSampler"
+          "title": "sampler"
         }
       },
       "9": {
@@ -412,6 +488,42 @@ data:
         "_meta": {
           "title": "Load Image"
         }
+      },
+      "3": {
+        "inputs": {
+          "lora_name": "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors",
+          "strength": 1,
+          "model": [
+            "2",
+            0
+          ]
+        },
+        "class_type": "ViggleTurboLora",
+        "_meta": {
+          "title": "viggle turbo"
+        }
+      },
+      "11": {
+        "inputs": {
+          "sampler_name": "er_sde"
+        },
+        "class_type": "KSamplerSelect",
+        "_meta": {
+          "title": "sampler select"
+        }
+      },
+      "12": {
+        "inputs": {
+          "latent": [
+            "7",
+            0
+          ],
+          "nodes": "1.0, 0.9375, 0.875, 0.75, 0.5, 0.25"
+        },
+        "class_type": "ViggleTurboSigmas",
+        "_meta": {
+          "title": "viggle turbo sigmas"
+        }
       }
     }
 
@@ -433,6 +545,11 @@ data:
   # IMAGE_EDIT_MODEL is used only when the caller omits "model" (the builtin edit_image
   # tool does); a chat model passing its own model string would have it injected into
   # unet_name verbatim.
+  #
+  # "seed" targets noise_seed (SamplerCustom). ComfyUIEditImageForm has no seed field in
+  # image_edits()' payload, so _apply_workflow_nodes always takes its random branch — every
+  # edit gets a fresh seed, and there is no way to pin one without adding a seed to that
+  # payload. Steps are not mappable at all now: the count lives in node 12's sigma string.
 
   IMAGES_EDIT_COMFYUI_WORKFLOW_NODES: |
     [
@@ -462,6 +579,6 @@ data:
         "node_ids": [
           "8"
         ],
-        "key": "seed"
+        "key": "noise_seed"
       }
     ]

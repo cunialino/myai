@@ -63,12 +63,19 @@ extraEnvVars:
         name: openwebui-env
         key: TOOL_SERVER_CONNECTIONS
 
-  # --- Image generation: Qwen-Image-2.1 on ComfyUI (Strix Halo, :8188) ---
+  # --- Image generation: Qwen-Image-2.1 + viggle-turbo on ComfyUI (Strix Halo, :8188) ---
   # Engine "comfyui": Open WebUI posts the workflow from config-env.yaml to
   # /prompt, waits for completion on /ws?clientId=... and then fetches the result
   # through /view. Both the HTTP and the WebSocket side must therefore stay
   # reachable from the cluster, which plain :8188 on the LAN is (11434, the
   # llama-swap port, is the only other one open).
+  #
+  # The graphs use Viggle's turbo nodes (ViggleTurboLora + ViggleTurboSigmas) and a
+  # 6-step er_sde schedule, so a picture is ~4x cheaper than the old 25-step KSampler
+  # run. That costs two external dependencies on the ComfyUI box: Viggle's
+  # comfyui/viggle_turbo.py in custom_nodes/ and the
+  # Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors adapter in loras/.
+  # If either is missing /prompt refuses the graph and both image paths fail.
   #
   # To fall back to gufo behind llama-swap while ComfyUI is off, restore exactly:
   #   IMAGE_GENERATION_ENGINE=openai  IMAGE_EDIT_ENGINE=openai
@@ -104,12 +111,11 @@ extraEnvVars:
   # <=4096 per side). The chart default of 512x512 degrades it badly.
   - name: IMAGE_SIZE
     value: "1024x1024"
-  # Written into KSampler.steps. Keep this set: the builtin generate_image tool sends
-  # no steps, and Open WebUI then puts null in the payload, which ComfyUI rejects
-  # outright (int(None)). 25 matches the tuned export and is roughly half the time of
-  # the model's 40-step default.
-  - name: IMAGE_STEPS
-    value: "25"
+  # IMAGE_STEPS is deliberately absent. The turbo graph has no steps widget: SamplerCustom
+  # walks the sigma string of ViggleTurboSigmas (node 12), so 6 steps is fixed in
+  # config-env.yaml and nothing reads IMAGE_STEPS any more. Going back off the turbo is a
+  # three-part change — KSampler node + "steps" mapping + IMAGE_STEPS — see the comments
+  # there for why a half-revert fails (or silently does nothing).
 
   # --- Image EDIT: separate engine switch, its own workflow ---
   # Open WebUI uploads each attachment to ComfyUI's /upload/image, writes the returned
