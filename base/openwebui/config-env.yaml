@@ -213,7 +213,7 @@ data:
       },
       "3": {
         "inputs": {
-          "lora_name": "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors",
+          "lora_name": "Qwen-Image-2.1-viggle-turbo-v0.3-6step-lora-r256.safetensors",
           "strength": 1,
           "model": [
             "2",
@@ -491,7 +491,7 @@ data:
       },
       "3": {
         "inputs": {
-          "lora_name": "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors",
+          "lora_name": "Qwen-Image-2.1-viggle-turbo-v0.3-6step-lora-r256.safetensors",
           "strength": 1,
           "model": [
             "2",

@@ -74,7 +74,7 @@ extraEnvVars:
   # 6-step er_sde schedule, so a picture is ~4x cheaper than the old 25-step KSampler
   # run. That costs two external dependencies on the ComfyUI box: Viggle's
   # comfyui/viggle_turbo.py in custom_nodes/ and the
-  # Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors adapter in loras/.
+  # Qwen-Image-2.1-viggle-turbo-v0.3-6step-lora-r256.safetensors adapter in loras/.
   # If either is missing /prompt refuses the graph and both image paths fail.
   #
   # To fall back to gufo behind llama-swap while ComfyUI is off, restore exactly:
