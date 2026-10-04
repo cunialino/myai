@@ -28,7 +28,7 @@ spec:
     spec:
       containers:
         - name: falkordb
-          image: falkordb/falkordb:latest
+          image: falkordb/falkordb:v4.22.0
           env:
             - name: BROWSER
               value: "0"
