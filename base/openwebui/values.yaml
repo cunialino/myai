@@ -63,19 +63,19 @@ extraEnvVars:
         name: openwebui-env
         key: TOOL_SERVER_CONNECTIONS
 
-  # --- Image generation: Qwen-Image-2.1 + viggle-turbo on ComfyUI (Strix Halo, :8188) ---
+  # --- Image generation: Qwen-Image-2.1 turbo on ComfyUI (Strix Halo, :8188) ---
   # Engine "comfyui": Open WebUI posts the workflow from config-env.yaml to
   # /prompt, waits for completion on /ws?clientId=... and then fetches the result
   # through /view. Both the HTTP and the WebSocket side must therefore stay
   # reachable from the cluster, which plain :8188 on the LAN is (11434, the
   # llama-swap port, is the only other one open).
   #
-  # The graphs use Viggle's turbo nodes (ViggleTurboLora + ViggleTurboSigmas) and a
-  # 6-step er_sde schedule, so a picture is ~4x cheaper than the old 25-step KSampler
-  # run. That costs two external dependencies on the ComfyUI box: Viggle's
-  # comfyui/viggle_turbo.py in custom_nodes/ and the
-  # Qwen-Image-2.1-viggle-turbo-v0.3-6step-lora-r256.safetensors adapter in loras/.
-  # If either is missing /prompt refuses the graph and both image paths fail.
+  # Both graphs run the turbo checkpoint (qwen_image_2.1_turbo_int8_convrot) with the lr
+  # LoRA at 0.5, euler + linear_quadratic, 8 steps at cfg 2.0 — stock nodes only, so the
+  # Viggle custom nodes (ViggleTurboLora/ViggleTurboSigmas) and their r256 adapter are no
+  # longer needed on the ComfyUI box. The only external requirements are the two files
+  # named below in ComfyUI's diffusion_models dir plus the text encoder and VAE baked
+  # into the graphs.
   #
   # To fall back to gufo behind llama-swap while ComfyUI is off, restore exactly:
   #   IMAGE_GENERATION_ENGINE=openai  IMAGE_EDIT_ENGINE=openai
@@ -93,7 +93,7 @@ extraEnvVars:
   # blanks the node — it is not an optional hint. The UI dropdown is built from
   # /object_info for that same node, so the two can never disagree.
   - name: IMAGE_GENERATION_MODEL
-    value: qwen_image_2.1_int8_convrot.safetensors
+    value: qwen_image_2.1_turbo_int8_convrot.safetensors
   - name: COMFYUI_BASE_URL
     value: http://192.168.0.6:8188
   - name: COMFYUI_WORKFLOW
@@ -111,11 +111,14 @@ extraEnvVars:
   # <=4096 per side). The chart default of 512x512 degrades it badly.
   - name: IMAGE_SIZE
     value: "1024x1024"
-  # IMAGE_STEPS is deliberately absent. The turbo graph has no steps widget: SamplerCustom
-  # walks the sigma string of ViggleTurboSigmas (node 12), so 6 steps is fixed in
-  # config-env.yaml and nothing reads IMAGE_STEPS any more. Going back off the turbo is a
-  # three-part change — KSampler node + "steps" mapping + IMAGE_STEPS — see the comments
-  # there for why a half-revert fails (or silently does nothing).
+  # Written into BasicScheduler.steps (node 12 of the generation graph). Keep this set:
+  # SamplerCustom has no steps widget of its own, and routers/images.py only puts `steps`
+  # in the payload when IMAGE_STEPS (or an explicit form value) is non-None — comfyui.py
+  # then writes every mapped key anyway, so unsetting this sends int(None) and ComfyUI
+  # refuses the prompt. 8 is the exported turbo schedule; it does NOT affect edits, whose
+  # schedule is frozen in the edit graph (see IMAGES_EDIT_COMFYUI_WORKFLOW_NODES).
+  - name: IMAGE_STEPS
+    value: "8"
 
   # --- Image EDIT: separate engine switch, its own workflow ---
   # Open WebUI uploads each attachment to ComfyUI's /upload/image, writes the returned
@@ -129,7 +132,7 @@ extraEnvVars:
   # Same file as IMAGE_GENERATION_MODEL; used only when the caller omits "model",
   # which the builtin edit_image tool does.
   - name: IMAGE_EDIT_MODEL
-    value: qwen_image_2.1_int8_convrot.safetensors
+    value: qwen_image_2.1_turbo_int8_convrot.safetensors
   - name: IMAGES_EDIT_COMFYUI_BASE_URL
     value: http://192.168.0.6:8188
   - name: IMAGES_EDIT_COMFYUI_WORKFLOW
