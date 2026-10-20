@@ -26,22 +26,15 @@ websocket:
   redis:
     enabled: false
 
-# Chat models live on the Strix Halo behind llama-swap (:11434), which is now the
-# single OpenAI-compatible endpoint for the whole box. The old :8731 listener is
-# gone; a dead entry here is not merely cosmetic — get_all_models_responses()
-# fans out over every URL in parallel and waits on all of them, so keeping it
-# made each model-list refresh stall on a connect timeout. Drop it, don't disable it.
 openaiBaseApiUrls:
   - http://192.168.0.6:11434/v1
 openaiApiKeys:
   - no-key
 
 extraEnvVars:
-  # The switch that makes every value in this file actually take effect.
   - name: ENABLE_PERSISTENT_CONFIG
     value: "false"
 
-  # --- previously UI-only, now declared ---
   - name: ENABLE_DIRECT_CONNECTIONS
     value: "true"
   - name: ENABLE_MEMORIES
@@ -51,7 +44,6 @@ extraEnvVars:
   - name: ENABLE_SIGNUP
     value: "false"
 
-  # --- JSON blobs (see config-env.yaml) ---
   - name: OPENAI_API_CONFIGS
     valueFrom:
       configMapKeyRef:
@@ -63,35 +55,10 @@ extraEnvVars:
         name: openwebui-env
         key: TOOL_SERVER_CONNECTIONS
 
-  # --- Image generation: Qwen-Image-2.1 turbo on ComfyUI (Strix Halo, :8188) ---
-  # Engine "comfyui": Open WebUI posts the workflow from config-env.yaml to
-  # /prompt, waits for completion on /ws?clientId=... and then fetches the result
-  # through /view. Both the HTTP and the WebSocket side must therefore stay
-  # reachable from the cluster, which plain :8188 on the LAN is (11434, the
-  # llama-swap port, is the only other one open).
-  #
-  # Both graphs run the turbo checkpoint (qwen_image_2.1_turbo_int8_convrot) with the lr
-  # LoRA at 0.5, euler + linear_quadratic, 8 steps at cfg 2.0 — stock nodes only, so the
-  # Viggle custom nodes (ViggleTurboLora/ViggleTurboSigmas) and their r256 adapter are no
-  # longer needed on the ComfyUI box. The only external requirements are the two files
-  # named below in ComfyUI's diffusion_models dir plus the text encoder and VAE baked
-  # into the graphs.
-  #
-  # To fall back to gufo behind llama-swap while ComfyUI is off, restore exactly:
-  #   IMAGE_GENERATION_ENGINE=openai  IMAGE_EDIT_ENGINE=openai
-  #   IMAGE_GENERATION_MODEL=qwen-image-2.1  IMAGE_EDIT_MODEL=qwen-image-2.1
-  #   IMAGES_OPENAI_API_BASE_URL / IMAGES_EDIT_OPENAI_API_BASE_URL = http://192.168.0.6:11434/v1
-  #   IMAGES_OPENAI_API_KEY / IMAGES_EDIT_OPENAI_API_KEY = no-key
-  #   IMAGES_OPENAI_PARAMS='{"steps": 25}'
   - name: ENABLE_IMAGE_GENERATION
     value: "true"
   - name: IMAGE_GENERATION_ENGINE
     value: comfyui
-  # Injected into the workflow's UNETLoader.unet_name (the type:model node in
-  # COMFYUI_WORKFLOW_NODES), so it must be a file that exists in ComfyUI's
-  # diffusion_models dir. get_image_model() returns "" when this is empty, which
-  # blanks the node — it is not an optional hint. The UI dropdown is built from
-  # /object_info for that same node, so the two can never disagree.
   - name: IMAGE_GENERATION_MODEL
     value: qwen_image_2.1_turbo_int8_convrot.safetensors
   - name: COMFYUI_BASE_URL
@@ -106,31 +73,15 @@ extraEnvVars:
       configMapKeyRef:
         name: openwebui-env
         key: COMFYUI_WORKFLOW_NODES
-  # Written into EmptyLatentImage and, unlike the old openai path, into the graph on
-  # every request: 1024x1024 is what Qwen-Image-2.1 is trained at (multiples of 32,
-  # <=4096 per side). The chart default of 512x512 degrades it badly.
   - name: IMAGE_SIZE
     value: "1024x1024"
-  # Written into BasicScheduler.steps (node 12 of the generation graph). Keep this set:
-  # SamplerCustom has no steps widget of its own, and routers/images.py only puts `steps`
-  # in the payload when IMAGE_STEPS (or an explicit form value) is non-None — comfyui.py
-  # then writes every mapped key anyway, so unsetting this sends int(None) and ComfyUI
-  # refuses the prompt. 8 is the exported turbo schedule; it does NOT affect edits, whose
-  # schedule is frozen in the edit graph (see IMAGES_EDIT_COMFYUI_WORKFLOW_NODES).
   - name: IMAGE_STEPS
     value: "8"
 
-  # --- Image EDIT: separate engine switch, its own workflow ---
-  # Open WebUI uploads each attachment to ComfyUI's /upload/image, writes the returned
-  # filename into the workflow's LoadImage node, then queues the graph. There is no
-  # edit button in the 0.11.x UI: the chat model calls the builtin edit_image tool with
-  # the URLs of the images attached to the chat (utils/tools.py).
   - name: ENABLE_IMAGE_EDIT
     value: "true"
   - name: IMAGE_EDIT_ENGINE
     value: comfyui
-  # Same file as IMAGE_GENERATION_MODEL; used only when the caller omits "model",
-  # which the builtin edit_image tool does.
   - name: IMAGE_EDIT_MODEL
     value: qwen_image_2.1_turbo_int8_convrot.safetensors
   - name: IMAGES_EDIT_COMFYUI_BASE_URL
@@ -145,27 +96,9 @@ extraEnvVars:
       configMapKeyRef:
         name: openwebui-env
         key: IMAGES_EDIT_COMFYUI_WORKFLOW_NODES
-  # IMAGE_EDIT_SIZE stays unset on purpose: the edit mapping carries no width/height
-  # nodes (see config-env.yaml), so setting it would do nothing but mislead.
-
-  # Cold-start headroom. Loading the ~25 GB int8 UNET plus the 8B text encoder takes
-  # minutes, and the ComfyUI path holds a single /ws connection for the whole run: the
-  # shared aiohttp ClientSession timeout (env.py AIOHTTP_CLIENT_TIMEOUT, 300s default)
-  # bounds that socket too, so a long generation dies as "WebSocket closed
-  # unexpectedly" rather than producing an image. Global knob, so it lifts every
-  # outbound call, not just images.
   - name: AIOHTTP_CLIENT_TIMEOUT
     value: "900"
 
-  # The chart derives WEBUI_URL from ingress.host, which yields the bare tailnet
-  # short name "https://chat". The tailscale operator upgrades the *Ingress* to
-  # chat.tail2f38ea.ts.net, but Open WebUI builds share links, OAuth redirects and
-  # media URLs straight from WEBUI_URL, so those come out unreachable. Uncomment to
-  # fix; unrelated to the persistent-config work.
-  # - name: WEBUI_URL
-  #   value: https://chat.tail2f38ea.ts.net
-
-  # --- database ---
   - name: DATABASE_TYPE
     value: postgresql
   - name: DATABASE_HOST

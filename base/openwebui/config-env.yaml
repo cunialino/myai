@@ -1,35 +1,13 @@
-# Non-scalar Open WebUI settings that have no first-class helm value.
-# Consumed by values.yaml via extraEnvVars -> configMapKeyRef.
-#
-# NOTE: OPENAI_API_CONFIGS is keyed by the *index* into openaiBaseApiUrls.
-# Reordering that list silently re-points these configs at the wrong endpoint.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: openwebui-env
   namespace: openwebui
 data:
-  # 0 -> http://192.168.0.6:11434/v1  (Strix Halo, llama-swap: everything lives here)
-  #
-  # connection_type is functional, not cosmetic: utils/task.py picks
-  # task.model.default for "local" models and task.model.external otherwise, and
-  # the model selector groups/filters on it. TASK_MODEL / TASK_MODEL_EXTERNAL are
-  # both unset here so the task path is inert today; "local" is the honest label
-  # for a LAN llama-swap box and keeps its models grouped under "Local".
-  #
-  # model_ids stays empty on purpose: a non-empty list makes Open WebUI skip the
-  # endpoint's /models and serve the static list instead, which would freeze the
-  # llama-swap aliases. Drop unwanted models in llama-swap, not here.
   OPENAI_API_CONFIGS: >-
     {"0":{"enable":true,"connection_type":"local","auth_type":"none","tags":[],
     "model_ids":[],"prefix_id":"","passthrough_params":[]}}
 
-  # MCP tool servers. Registered at startup by set_tool_servers() (main.py:422),
-  # so no admin API call is needed to make these live.
-  #
-  # info.id is load-bearing: it prefixes every exposed tool name
-  # (f"{server_id}_{function_name}", utils/tools.py:471) and falls back to the
-  # list index when absent. Keep the ids stable and append-only.
   TOOL_SERVER_CONNECTIONS: >-
     [{"url":"http://graphiti-mcp.graphiti.svc.cluster.local:8000/mcp/",
     "path":"openapi.json","type":"mcp","auth_type":"none","key":"","headers":null,
@@ -46,25 +24,6 @@ data:
     "access_grants":[{"permission":"read","principal_id":"*","principal_type":"user"}],
     "function_name_filter_list":""}}]
 
-  # --- Image GENERATION graph (Qwen-Image-2.1 turbo; export: frozen-41.json) ---
-  # Model chain: UNETLoader(1, qwen_image_2.1_turbo_int8_convrot) ->
-  # LoraLoaderModelOnly(2, qwen_21_lr @ 0.5). That is the whole chain: the turbo adapter
-  # is baked into this checkpoint, so Viggle's side-branch node is gone and node 8 reads
-  # its model straight from node 2. Consequence worth knowing — the graphs no longer need
-  # any custom node beyond TextEncodeQwenImage21, i.e. no viggle_turbo.py in
-  # ComfyUI/custom_nodes/ and no viggle-turbo lora in loras/. What has to exist on disk is
-  # now exactly the four files the graph names: the two checkpoints in values.yaml plus
-  # the text encoder and VAE baked in here.
-  #
-  # Sampling is SamplerCustom(8) + KSamplerSelect(11, euler) + BasicScheduler(12,
-  # linear_quadratic, 8 steps, denoise 1.0) at cfg 2.0 with add_noise=true. SamplerCustom
-  # still has no steps widget of its own — the count is node 12's `steps` — which is why
-  # the "steps" mapping below is back (see the note there before removing IMAGE_STEPS).
-  #
-  # BasicScheduler takes `model` (node 2), not the latent: the resolution-dependent shift
-  # comes from the loaded model's own options, so nothing has to track Open WebUI's
-  # width/height writes any more. Both model inputs (8 and 12) must stay on node 2 — this
-  # is the only shape the export was verified in.
   COMFYUI_WORKFLOW: |
     {
       "1": {
@@ -80,7 +39,7 @@ data:
       "2": {
         "inputs": {
           "lora_name": "qwen_21_lr.safetensors",
-          "strength_model": 0.5,
+          "strength_model": 1.0,
           "model": [
             "1",
             0
@@ -145,7 +104,7 @@ data:
         "inputs": {
           "add_noise": true,
           "noise_seed": 7777,
-          "cfg": 2.0,
+          "cfg": 3.0,
           "model": [
             "2",
             0
@@ -207,7 +166,7 @@ data:
       },
       "11": {
         "inputs": {
-          "sampler_name": "euler"
+          "sampler_name": "res_2s"
         },
         "class_type": "KSamplerSelect",
         "_meta": {
@@ -220,7 +179,7 @@ data:
             "2",
             0
           ],
-          "scheduler": "linear_quadratic",
+          "scheduler": "beta57",
           "steps": 8,
           "denoise": 1.0
         },
@@ -230,34 +189,6 @@ data:
         }
       }
     }
-
-
-  # Generation mapping. "model" is why IMAGE_GENERATION_MODEL is mandatory: it lands in
-  # UNETLoader.unet_name, and get_image_model() returns "" when that env var is empty,
-  # which blanks the node. It is also what GET /images/models reads back (first "model"
-  # node -> its class_type -> the first *_name entry in /object_info), so the UI
-  # dropdown lists the files that are really in ComfyUI's diffusers dir.
-  #
-  # Every mapped field is written unconditionally, so the payload must always supply it:
-  # IMAGE_SIZE and CreateImageForm.n=1 keep width/height/n honest. "seed" names
-  # SamplerCustom's widget (noise_seed) for the same reason: _apply_workflow_nodes writes
-  # workflow[id]['inputs'][key] verbatim, and when the payload carries no seed — the
-  # builtin generate_image tool never does — it substitutes random.randint(0, 2**50), so
-  # the value baked into node 8 is a placeholder.
-  #
-  # "steps" is back, on node 12 (BasicScheduler). It is only safe because IMAGE_STEPS is
-  # set in values.yaml: routers/images.py puts `steps` in the comfyui payload only when
-  # IMAGE_STEPS or form_data.steps is non-None, and comfyui.py writes every mapped key
-  # verbatim — drop IMAGE_STEPS and payload.steps becomes None, which ComfyUI's validator
-  # turns into int(None) -> TypeError -> refused prompt. Removing this mapping instead is
-  # fine as a pair with IMAGE_STEPS: 8 then stays frozen in the graph.
-  #
-  # negative_prompt is deliberately NOT mapped. The builtin generate_image tool posts
-  # CreateImageForm(prompt=...) only, and ComfyUI stringifies a None on a STRING input
-  # into the literal word "None": not an error, just a silent negative that overwrites
-  # the anatomy list baked into node 6. Re-add
-  # {"type":"negative_prompt","node_ids":["6"],"key":"negative_prompt"} if every caller
-  # really sends one (the chat UI does, tool calls do not).
 
   COMFYUI_WORKFLOW_NODES: |
     [
@@ -312,21 +243,6 @@ data:
       }
     ]
 
-
-  # --- Image EDIT graph (its own switch: IMAGE_EDIT_ENGINE=comfyui) ---
-  # Node 15 LoadImage is the only Open WebUI-relevant difference from the generation
-  # graph: image_edits() uploads every attachment to ComfyUI's /upload/image and writes
-  # the returned filename into it. EmptyLatentImage (node 7) fixes the output size, so
-  # the reference's aspect ratio is NOT preserved — 1024x1024 unless node 7 changes or
-  # IMAGE_EDIT_SIZE is set, in which case width/height must be mapped below too.
-  #
-  # The sampling half (nodes 1, 2, 8, 11, 12) is byte-identical to the generation graph
-  # (export: frozen-41-edit.json vs frozen-41.json): same turbo checkpoint, same lr LoRA
-  # at 0.5, same euler + linear_quadratic 8-step schedule at cfg 2.0. Only node 6 (edit
-  # prompt + negative) and node 10 (filename prefix Qwen2.1/edit) differ. <image1> in the
-  # prompt is node 15's image; node 15's "image" value is a placeholder overwritten by
-  # the upload on every request.
-
   IMAGES_EDIT_COMFYUI_WORKFLOW: |
     {
       "1": {
@@ -342,7 +258,7 @@ data:
       "2": {
         "inputs": {
           "lora_name": "qwen_21_lr.safetensors",
-          "strength_model": 0.5,
+          "strength_model": 1.0,
           "model": [
             "1",
             0
@@ -411,7 +327,7 @@ data:
         "inputs": {
           "add_noise": true,
           "noise_seed": 7777,
-          "cfg": 2.0,
+          "cfg": 3.0,
           "model": [
             "2",
             0
@@ -482,7 +398,7 @@ data:
       },
       "11": {
         "inputs": {
-          "sampler_name": "euler"
+          "sampler_name": "res_2s"
         },
         "class_type": "KSamplerSelect",
         "_meta": {
@@ -495,7 +411,7 @@ data:
             "2",
             0
           ],
-          "scheduler": "linear_quadratic",
+          "scheduler": "beta57",
           "steps": 8,
           "denoise": 1.0
         },
@@ -505,36 +421,6 @@ data:
         }
       }
     }
-
-
-  # Edit mapping. The type set is smaller than the generation one on purpose:
-  # ComfyUIEditImageForm carries {image, prompt, width?, height?, n?, steps?, seed?},
-  # and image_edits() fills width/height only when a size is configured and n only when
-  # the caller passes one — mapping "width", "height", "n" or "steps" here would write
-  # null into INT widgets and fail /prompt validation. "negative_prompt" is worse: the
-  # form has no such field, so _apply_workflow_nodes raises AttributeError inside
-  # comfyui_edit_image, which catches it and returns None -> "failed to edit image".
-  # Keep the edit negative baked into node 6.
-  #
-  # "image" consumes one uploaded name per listed node_id, so multi-reference edits mean
-  # one LoadImage node per image with their ids in order, plus the matching
-  # images.image_2, images.image_3, ... slots on node 6 — a graph change, not a mapping
-  # change.
-  #
-  # IMAGE_EDIT_MODEL is used only when the caller omits "model" (the builtin edit_image
-  # tool does); a chat model passing its own model string would have it injected into
-  # unet_name verbatim.
-  #
-  # "seed" targets noise_seed (SamplerCustom). ComfyUIEditImageForm has no seed field in
-  # image_edits()' payload, so _apply_workflow_nodes always takes its random branch — every
-  # edit gets a fresh seed, and there is no way to pin one without adding a seed to that
-  # payload.
-  #
-  # "steps" stays out of this list even though node 12 (BasicScheduler) now has the
-  # widget: image_edits() never sends steps and ComfyUIEditImageForm defaults it to None,
-  # so mapping it here would write null into an INT widget on every edit. The turbo edit
-  # schedule is therefore frozen at 8 in the graph, independent of IMAGE_STEPS (which
-  # only feeds the generation graph).
 
   IMAGES_EDIT_COMFYUI_WORKFLOW_NODES: |
     [
