@@ -39,7 +39,7 @@ data:
       "2": {
         "inputs": {
           "lora_name": "qwen_21_lr.safetensors",
-          "strength_model": 1.0,
+          "strength_model": 0.8,
           "model": [
             "1",
             0
@@ -166,7 +166,7 @@ data:
       },
       "11": {
         "inputs": {
-          "sampler_name": "res_2s"
+          "sampler_name": "er_sde"
         },
         "class_type": "KSamplerSelect",
         "_meta": {
@@ -179,7 +179,7 @@ data:
             "2",
             0
           ],
-          "scheduler": "beta57",
+          "scheduler": "beta",
           "steps": 8,
           "denoise": 1.0
         },
@@ -258,7 +258,7 @@ data:
       "2": {
         "inputs": {
           "lora_name": "qwen_21_lr.safetensors",
-          "strength_model": 1.0,
+          "strength_model": 0.8,
           "model": [
             "1",
             0
@@ -398,7 +398,7 @@ data:
       },
       "11": {
         "inputs": {
-          "sampler_name": "res_2s"
+          "sampler_name": "er_sde"
         },
         "class_type": "KSamplerSelect",
         "_meta": {
@@ -411,7 +411,7 @@ data:
             "2",
             0
           ],
-          "scheduler": "beta57",
+          "scheduler": "beta",
           "steps": 8,
           "denoise": 1.0
         },
