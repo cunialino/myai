@@ -32,8 +32,11 @@ models PVC and the KEDA RBAC fix — all landing in the `graphiti` namespace.
 ## MCP server
 
 [`deployment.yaml`](https://github.com/cunialino/myai/tree/main/base/graphiti/deployment.yaml)
-runs the `zepai/knowledge-graph-mcp:standalone` image (no bundled DB) with
-`uv run --no-sync main.py`. Configuration happens through env vars:
+runs the `zepai/knowledge-graph-mcp` image (no bundled DB) with
+`uv run --no-sync main.py`. The image is referenced by **digest**, currently
+`1.1.3-standalone`, because the floating `standalone` tag moved to mcp SDK 2.x
+without warning and crash-looped the pod for three days. Configuration happens
+through env vars:
 
 | Env | Value | Meaning |
 |-----|-------|---------|
@@ -44,19 +47,23 @@ runs the `zepai/knowledge-graph-mcp:standalone` image (no bundled DB) with
 | `LLM__MODEL` | `gpt-oss-20b` | Must match the `--alias` of llamacpp-graphiti |
 | `OPENAI_API_URL` | `http://llamacpp-embed-svc-proxy.graphiti.svc.cluster.local:8080/v1` | Embeddings endpoint |
 | `EMBEDDER__MODEL` / `EMBEDDER__DIMENSIONS` | `nomic-embed` / `768` | Must match llamacpp-embed |
+| `SERVER__HOST` | `0.0.0.0` | Overrides `server.host` in the in-image `config.yaml`, which defaults to `127.0.0.1` |
 
 Both endpoints go through the KEDA interceptor proxies, so Graphiti's LLM
 traffic also drives scale-to-zero of the dedicated llama servers.
 
-Two files are patched into the image via ConfigMaps (mounted over the
-in-tree sources):
+The image runs **unmodified** — it used to carry two ConfigMap patches over
+`services/factories.py` and `graphiti_mcp_server.py`. Both became redundant:
+upstream reads the bind host from configuration (see `SERVER__HOST`) and its
+`LLMClientFactory` switches to `OpenAIGenericClient` whenever the base URL is
+not an official OpenAI domain, which is exactly what the local llama.cpp
+endpoints need. Carrying full copies of upstream sources instead meant every
+image bump was a silent breakage waiting to happen.
 
-- `graphiti-factories` → `/app/mcp/src/services/factories.py` — adds the
-  FalkorDB database driver to the upstream factories.
-- `graphiti-mcp-server` → `/app/mcp/src/graphiti_mcp_server.py` — the MCP
-  server itself (tools: `add_memory`, `search_nodes`,
-  `search_memory_facts`, `get_entity_edge`, `get_episodes`,
-  `delete_episode`, `delete_entity_edge`, `clear_graph`, `get_status`).
+Exposed tools: `add_memory`, `search_nodes`, `search_memory_facts`,
+`get_entity_edge`, `get_episodes`, `get_episode_entities`, `summarize_saga`,
+`build_communities`, `add_triplet`, `delete_episode`, `delete_entity_edge`,
+`clear_graph`, `get_status`.
 
 The service is exposed on port 8000 via a Tailscale ingress
 (`tailscale-small`), host `graphiti` → `graphiti.tail2f38ea.ts.net`. MCP
