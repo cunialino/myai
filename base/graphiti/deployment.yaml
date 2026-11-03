@@ -43,8 +43,14 @@ spec:
               value: 0.0.0.0
             - name: OPENAI_API_KEY
               value: no-key
-            - name: OPENAI_BASE_URL
+            # The image resolves the LLM and the embedder from the same OPENAI_API_URL,
+            # so each endpoint has to be pinned through the nested settings delimiter.
+            # Without this, entity extraction is sent to the embeddings model and fails
+            # with "Failed to initialize samplers".
+            - name: LLM__PROVIDERS__OPENAI__API_URL
               value: http://llamacpp-graphiti-svc-proxy.graphiti.svc.cluster.local:8080/v1
+            - name: EMBEDDER__PROVIDERS__OPENAI__API_URL
+              value: http://llamacpp-embed-svc-proxy.graphiti.svc.cluster.local:8080/v1
             - name: LLM__MODEL
               value: gpt-oss-20b
             - name: LLM__MAX_TOKENS
