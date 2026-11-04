@@ -1,0 +1,11 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: open-webui
+  namespace: openwebui
+spec:
+  interval: 1h
+  timeout: 3m
+  # A plain HTTP index, not OCI: the URL is the repository itself, unlike the OCI sources elsewhere
+  # in this cluster that point at the path containing the charts.
+  url: https://helm.openwebui.com

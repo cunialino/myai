@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Open WebUI: the chart, the ConfigMap holding its durable configuration, and the app half of its
+# Postgres credentials.
+#
+# ENABLE_PERSISTENT_CONFIG=false in the values makes Admin UI edits in-memory only, so these manifests
+# are the only durable source of truth. openwebui-env carries the settings too large to read as env
+# values, which is why they are a ConfigMap rather than extraEnvVars.
+#
+# No namespace transformer: Renovate's flux manager links a HelmRelease to its HelmRepository only when
+# the namespace is written in the manifest, so both state it explicitly. The cluster side of the
+# credentials, cnpg-system/openwebui-db, and the Database CR live in homelab's postgres layer instead,
+# next to every other CNPG role, so nothing here reaches outside this namespace.
+resources:
+  - namespace.yaml
+  - helmrepository.yaml
+  - helmrelease.yaml
+  - config-env.yaml
+  - secret-db.yaml
