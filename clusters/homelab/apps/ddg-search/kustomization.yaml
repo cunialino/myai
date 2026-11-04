@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# The DuckDuckGo MCP proxy: one Deployment, a LoadBalancer Service whose address is pinned to the LAN
+# by the lbipam.cilium.io/ips annotation, and the Tailscale ingress that serves it as `ddg`.
+#
+# No namespace transformer: all three documents already state namespace ddg-search, so a transformer
+# would only duplicate what is written below them.
+resources:
+  - namespace.yaml
+  - ddg-search.yaml
