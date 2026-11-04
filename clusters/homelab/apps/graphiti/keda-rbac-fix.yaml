@@ -25,3 +25,5 @@ subjects:
   - kind: ServiceAccount
     name: keda-add-ons-http-external-scaler
     namespace: keda
+
+---

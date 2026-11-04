@@ -1,6 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: graphiti
   name: llamacpp-embed
 spec:
   strategy:
@@ -68,6 +69,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  namespace: graphiti
   name: llamacpp-embed-svc
 spec:
   type: ClusterIP
@@ -85,6 +87,7 @@ spec:
 apiVersion: http.keda.sh/v1beta1
 kind: InterceptorRoute
 metadata:
+  namespace: graphiti
   name: llamacpp-embed
 spec:
   target:
@@ -105,6 +108,7 @@ spec:
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
+  namespace: graphiti
   name: llamacpp-embed
 spec:
   scaleTargetRef:
@@ -124,9 +128,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  namespace: graphiti
   name: llamacpp-embed-svc-proxy
 spec:
   type: ExternalName
   externalName: keda-add-ons-http-interceptor-proxy.keda.svc.cluster.local
   ports:
     - port: 8080
+---

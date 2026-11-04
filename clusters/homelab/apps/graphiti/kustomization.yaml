@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# The graphiti stack: two llama.cpp servers autoscaled by KEDA, FalkorDB as the graph store, the MCP
+# server in front, a shared local-PV model store, and the RBAC fix the KEDA HTTP external scaler needs.
+#
+# Deliberately no namespace transformer. keda-rbac-fix.yaml binds the external scaler's ServiceAccount,
+# which lives in namespace keda; a transformer would rewrite that subject to graphiti and break
+# autoscaling with nothing reporting an error. So the namespaced documents state their own namespace,
+# while the PersistentVolume and the two RBAC objects stay cluster-scoped.
+resources:
+  - namespace.yaml
+  - storage.yaml
+  - falkordb.yaml
+  - llamacpp-graphiti.yaml
+  - llamacpp-embed.yaml
+  - deployment.yaml
+  - keda-rbac-fix.yaml

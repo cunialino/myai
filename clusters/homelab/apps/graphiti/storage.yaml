@@ -33,6 +33,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
+  namespace: graphiti
   name: models-pvc
 spec:
   # Bind explicitly: this is a statically provisioned local PV with no
@@ -44,3 +45,5 @@ spec:
   resources:
     requests:
       storage: 500Gi
+
+---
