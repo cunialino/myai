@@ -91,7 +91,7 @@ spec:
       - name: IMAGE_GENERATION_MODEL
         value: qwen_image_2.1_turbo_int8_convrot.safetensors
       - name: COMFYUI_BASE_URL
-        value: http://192.168.0.6:8188
+        value: http://192.168.0.6:11434/comfyui
       - name: COMFYUI_WORKFLOW
         valueFrom:
           configMapKeyRef:
@@ -114,7 +114,7 @@ spec:
       - name: IMAGE_EDIT_MODEL
         value: qwen_image_2.1_turbo_int8_convrot.safetensors
       - name: IMAGES_EDIT_COMFYUI_BASE_URL
-        value: http://192.168.0.6:8188
+        value: http://192.168.0.6:11434/comfyui
       - name: IMAGES_EDIT_COMFYUI_WORKFLOW
         valueFrom:
           configMapKeyRef:
